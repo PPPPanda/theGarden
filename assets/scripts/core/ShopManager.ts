@@ -1,6 +1,6 @@
 /**
  * ShopManager - Shop System
- * Handles shop refresh, purchase, lock, and coin deduction
+ * Handles shop refresh, purchase, lock - gold managed by GameLoop
  */
 
 import { IItemTemplate, IShopSlot, IShopState } from './types';
@@ -12,13 +12,12 @@ const BASE_REFRESH_COST = 2;
 const REFRESH_COST_INCREASE = 2;
 
 /**
- * Shop Manager - manages shop state and transactions
+ * Shop Manager - manages shop state (gold managed externally by GameLoop)
  */
 export class ShopManager {
     private itemDB: ItemDB;
     private random: SeededRandom;
     private state: IShopState;
-    private playerGold: number = 100;
     private maxShopSlots: number = SHOP_SLOT_COUNT;
 
     constructor(seed: number) {
@@ -81,59 +80,73 @@ export class ShopManager {
     }
 
     /**
-     * Get player gold
+     * Get refresh cost
      */
-    public getPlayerGold(): number {
-        return this.playerGold;
+    public getRefreshCost(): number {
+        return this.state.refreshCost;
     }
 
     /**
-     * Set player gold
+     * Check if can purchase (does NOT deduct gold - caller handles gold)
+     * Returns the slot info if purchasable, null otherwise
      */
-    public setPlayerGold(gold: number): void {
-        this.playerGold = Math.max(0, gold);
+    public canPurchase(index: number): { template: IItemTemplate; cost: number } | null {
+        const slot = this.getSlot(index);
+        if (!slot || slot.purchased) {
+            return null;
+        }
+        
+        const template = this.itemDB.getTemplate(slot.templateId);
+        if (!template) {
+            return null;
+        }
+
+        return {
+            template,
+            cost: slot.price
+        };
     }
 
     /**
-     * Deduct gold
+     * Mark slot as purchased (caller handles gold deduction)
      */
-    public deductGold(amount: number): boolean {
-        if (this.playerGold < amount) {
+    public markPurchased(index: number): boolean {
+        const slot = this.getSlot(index);
+        if (!slot || slot.purchased) {
             return false;
         }
-        this.playerGold -= amount;
+        
+        slot.purchased = true;
         return true;
     }
 
     /**
-     * Add gold
+     * Purchase result - returned to GameLoop for gold handling
      */
-    public addGold(amount: number): void {
-        this.playerGold += amount;
-    }
-
-    /**
-     * Purchase item from slot
-     */
-    public purchase(index: number): IItemTemplate | null {
+    public purchaseResult(index: number): { success: boolean; template: IItemTemplate | null; cost: number } {
         const slot = this.getSlot(index);
-        if (!slot || slot.purchased || slot.locked) {
-            return null;
+        if (!slot || slot.purchased) {
+            return { success: false, template: null, cost: 0 };
         }
-
-        if (!this.deductGold(slot.price)) {
-            return null;
+        
+        const template = this.itemDB.getTemplate(slot.templateId);
+        if (!template) {
+            return { success: false, template: null, cost: 0 };
         }
 
         // Mark as purchased
         slot.purchased = true;
 
-        // Return the template
-        return this.itemDB.getTemplate(slot.templateId) ?? null;
+        return {
+            success: true,
+            template,
+            cost: slot.price
+        };
     }
 
     /**
-     * Lock/unlock slot
+     * Toggle lock on slot
+     * Lock means "preserve this slot during refresh"
      */
     public toggleLock(index: number): boolean {
         const slot = this.getSlot(index);
@@ -146,43 +159,33 @@ export class ShopManager {
     }
 
     /**
-     * Refresh shop
+     * Refresh shop (does NOT deduct gold - caller handles gold)
+     * Returns { success: boolean, newCost: number }
+     * Locked slots are preserved (not replaced)
      */
-    public refresh(): boolean {
-        // Check if can afford
-        if (!this.deductGold(this.state.refreshCost)) {
-            return false;
-        }
-
-        // Increase refresh cost
-        this.state.refreshCost += REFRESH_COST_INCREASE;
-        this.state.refreshCount++;
-
-        // Generate new slots (keep locked ones)
+    public refreshResult(): { success: boolean; newCost: number } {
+        // Generate new slots
         const newSlots = this.generateShopSlots();
+        
+        // Preserve locked slots (they stay the same, not replaced)
         for (let i = 0; i < this.state.slots.length; i++) {
-            if (this.state.slots[i].locked) {
-                // Keep locked slot, just regenerate the item
-                const item = this.itemDB.randomTemplate(this.random.next() * 10000);
-                if (item) {
-                    newSlots[i] = {
-                        ...this.state.slots[i],
-                        templateId: item.templateId,
-                        price: item.cost ?? 10
-                    };
-                }
+            const oldSlot = this.state.slots[i];
+            if (oldSlot.locked && !oldSlot.purchased) {
+                // Keep the locked slot unchanged
+                newSlots[i] = { ...oldSlot };
             }
         }
 
         this.state.slots = newSlots;
-        return true;
-    }
+        
+        // Increase refresh cost
+        this.state.refreshCost += REFRESH_COST_INCREASE;
+        this.state.refreshCount++;
 
-    /**
-     * Get refresh cost
-     */
-    public getRefreshCost(): number {
-        return this.state.refreshCost;
+        return {
+            success: true,
+            newCost: this.state.refreshCost
+        };
     }
 
     /**
@@ -207,12 +210,19 @@ export class ShopManager {
     }
 
     /**
-     * Get item templates for current shop
+     * Get item templates for current shop (not purchased)
      */
     public getShopItems(): IItemTemplate[] {
         return this.state.slots
             .filter(slot => !slot.purchased)
             .map(slot => this.itemDB.getTemplate(slot.templateId))
             .filter((item): item is IItemTemplate => item !== undefined);
+    }
+
+    /**
+     * Get refresh count
+     */
+    public getRefreshCount(): number {
+        return this.state.refreshCount;
     }
 }

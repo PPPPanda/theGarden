@@ -130,10 +130,10 @@ export class MainScene {
     }
 
     /**
-     * Refresh shop
+     * Refresh shop (via GameLoop which handles gold)
      */
     public refreshShop(): boolean {
-        const success = this.getShopManager().refresh();
+        const success = this.gameLoop.refreshShop();
         if (success) {
             // Update gold display
             this.updateGoldDisplay();

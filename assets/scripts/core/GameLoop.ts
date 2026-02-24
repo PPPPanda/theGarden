@@ -326,15 +326,44 @@ export class GameLoop {
     }
 
     /**
-     * Purchase from shop and place
+     * Purchase from shop and place (handles gold deduction)
      */
     public purchaseFromShop(slotIndex: number, position: IGridPosition): boolean {
-        const template = this.shopManager.purchase(slotIndex);
-        if (!template) {
+        // Get purchase result (doesn't deduct gold yet)
+        const result = this.shopManager.purchaseResult(slotIndex);
+        if (!result.success || !result.template) {
             return false;
         }
 
-        return this.purchaseAndPlace(template.templateId, position);
+        // Check if player has enough gold
+        if (this.playerGold < result.cost) {
+            return false;
+        }
+
+        // Deduct gold
+        this.playerGold -= result.cost;
+
+        // Place item
+        return this.purchaseAndPlace(result.template.templateId, position);
+    }
+
+    /**
+     * Refresh shop (handles gold deduction)
+     */
+    public refreshShop(): boolean {
+        const cost = this.shopManager.getRefreshCost();
+        
+        // Check if player has enough gold
+        if (this.playerGold < cost) {
+            return false;
+        }
+
+        // Deduct gold
+        this.playerGold -= cost;
+
+        // Refresh shop
+        const result = this.shopManager.refreshResult();
+        return result.success;
     }
 
     /**
