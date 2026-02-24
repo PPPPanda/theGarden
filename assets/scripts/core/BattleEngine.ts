@@ -404,4 +404,337 @@ export class BattleEngine {
             this.enemyHp = Math.min(100, this.enemyHp + amount);
         }
     }
+
+    // ============= Battle Resolution =============
+
+    /**
+     * Resolve a timeline event - execute all effects
+     */
+    public resolveEvent(event: ITimelineEvent): void {
+        const item = event.target === 'player'
+            ? this.playerItems.find(i => i.id === event.itemId)
+            : this.enemyItems.find(i => i.id === event.itemId);
+        
+        if (!item) return;
+
+        const sourceSide = event.target === 'player' ? 'enemy' : 'player';
+        const targetSide = event.target;
+
+        for (const effect of item.effects) {
+            switch (effect.type) {
+                case 'damage':
+                    this.applyDamageWithShield(targetSide, effect.value);
+                    break;
+                case 'heal':
+                    this.applyHeal(targetSide, effect.value);
+                    break;
+                case 'buff':
+                    this.addStatusEffect(sourceSide, {
+                        type: StatusEffectType.Shield,
+                        duration: (effect.params?.duration as number) ?? 5,
+                        value: effect.value,
+                        sourceItemId: item.id,
+                        stacks: effect.value
+                    });
+                    break;
+                case 'debuff':
+                    const debuffType = (effect.params?.statusType as StatusEffectType) || StatusEffectType.Poison;
+                    this.addStatusEffect(targetSide, {
+                        type: debuffType,
+                        duration: (effect.params?.duration as number) ?? 3,
+                        value: effect.value,
+                        sourceItemId: item.id,
+                        stacks: 1
+                    });
+                    break;
+                case 'special':
+                    // Handle special effects like thorns, lifesteal, etc.
+                    if (effect.params?.thorns) {
+                        // Reflect damage to attacker
+                        this.applyDamageWithShield(sourceSide, effect.value);
+                    }
+                    if (effect.params?.lifesteal) {
+                        const healAmount = Math.min(effect.value, this.getMaxHp(targetSide) - this.getCurrentHp(targetSide));
+                        this.applyHeal(sourceSide, healAmount);
+                    }
+                    break;
+            }
+        }
+
+        // Check adjacent coordination
+        this.resolveAdjacentEffects(item.id, sourceSide);
+    }
+
+    /**
+     * Apply damage with shield absorption
+     */
+    private applyDamageWithShield(target: 'player' | 'enemy', damage: number): void {
+        const effects = target === 'player' ? this.playerEffects : this.enemyEffects;
+        const shieldEffect = effects.find(e => e.type === StatusEffectType.Shield);
+        
+        let remainingDamage = damage;
+        
+        if (shieldEffect && shieldEffect.stacks > 0) {
+            const shieldAbsorb = Math.min(shieldEffect.stacks, remainingDamage);
+            shieldEffect.stacks -= shieldAbsorb;
+            remainingDamage -= shieldAbsorb;
+            
+            // Log shield used
+            this.eventLog.push({
+                time: this.currentTime,
+                type: 'effect_tick',
+                target,
+                value: shieldAbsorb,
+                description: `Shield absorbed ${shieldAbsorb} damage`
+            });
+        }
+
+        // Apply remaining damage
+        if (remainingDamage > 0) {
+            if (target === 'player') {
+                this.playerHp = Math.max(0, this.playerHp - remainingDamage);
+            } else {
+                this.enemyHp = Math.max(0, this.enemyHp - remainingDamage);
+            }
+            
+            this.eventLog.push({
+                time: this.currentTime,
+                type: 'damage',
+                target,
+                value: remainingDamage,
+                description: `Dealt ${remainingDamage} damage`
+            });
+        }
+    }
+
+    /**
+     * Add a status effect to a side
+     */
+    private addStatusEffect(side: 'player' | 'enemy', effect: IStatusEffect): void {
+        const effects = side === 'player' ? this.playerEffects : this.enemyEffects;
+        
+        // Check if same type exists, stack if so
+        const existing = effects.find(e => e.type === effect.type);
+        if (existing) {
+            existing.stacks += effect.stacks;
+            existing.duration = Math.max(existing.duration, effect.duration);
+        } else {
+            effects.push({ ...effect });
+        }
+
+        this.eventLog.push({
+            time: this.currentTime,
+            type: 'status_apply',
+            target: side,
+            value: effect.value,
+            description: `Applied ${effect.type} (${effect.stacks} stacks)`
+        });
+    }
+
+    /**
+     * Tick status effects over time
+     */
+    public tickStatusEffects(fromTime: number, toTime: number): void {
+        const deltaTime = toTime - fromTime;
+        
+        // Process player effects
+        this.tickSideEffects('player', deltaTime);
+        
+        // Process enemy effects
+        this.tickSideEffects('enemy', deltaTime);
+    }
+
+    /**
+     * Tick effects for one side
+     */
+    private tickSideEffects(side: 'player' | 'enemy', deltaTime: number): void {
+        const effects = side === 'player' ? this.playerEffects : this.enemyEffects;
+        const targetHp = side === 'player' ? this.playerHp : this.enemyHp;
+        const maxHp = 100; // TODO: get from config
+
+        for (let i = effects.length - 1; i >= 0; i--) {
+            const effect = effects[i];
+            
+            // Apply per-tick effects
+            switch (effect.type) {
+                case StatusEffectType.Poison:
+                    const poisonDamage = effect.value * deltaTime;
+                    if (side === 'player') {
+                        this.playerHp = Math.max(0, this.playerHp - poisonDamage);
+                    } else {
+                        this.enemyHp = Math.max(0, this.enemyHp - poisonDamage);
+                    }
+                    this.eventLog.push({
+                        time: this.currentTime,
+                        type: 'effect_tick',
+                        target: side,
+                        value: poisonDamage,
+                        description: `Poison dealt ${poisonDamage.toFixed(2)} damage`
+                    });
+                    break;
+                    
+                case StatusEffectType.Burn:
+                    const burnDamage = (effect.value / 100) * maxHp * deltaTime;
+                    if (side === 'player') {
+                        this.playerHp = Math.max(0, this.playerHp - burnDamage);
+                    } else {
+                        this.enemyHp = Math.max(0, this.enemyHp - burnDamage);
+                    }
+                    this.eventLog.push({
+                        time: this.currentTime,
+                        type: 'effect_tick',
+                        target: side,
+                        value: burnDamage,
+                        description: `Burn dealt ${burnDamage.toFixed(2)} damage`
+                    });
+                    break;
+                    
+                case StatusEffectType.Regen:
+                    const regenAmount = effect.value * deltaTime;
+                    if (side === 'player') {
+                        this.playerHp = Math.min(maxHp, this.playerHp + regenAmount);
+                    } else {
+                        this.enemyHp = Math.min(maxHp, this.enemyHp + regenAmount);
+                    }
+                    this.eventLog.push({
+                        time: this.currentTime,
+                        type: 'effect_tick',
+                        target: side,
+                        value: regenAmount,
+                        description: `Regen healed ${regenAmount.toFixed(2)} HP`
+                    });
+                    break;
+            }
+
+            // Decrease duration
+            effect.duration -= deltaTime;
+            
+            // Remove expired effects
+            if (effect.duration <= 0) {
+                effects.splice(i, 1);
+                this.eventLog.push({
+                    time: this.currentTime,
+                    type: 'status_expire',
+                    target: side,
+                    value: 0,
+                    description: `${effect.type} expired`
+                });
+            }
+        }
+    }
+
+    /**
+     * Resolve adjacent item effects
+     */
+    private resolveAdjacentEffects(itemId: string, sourceSide: 'player' | 'enemy'): void {
+        const grid = sourceSide === 'player' ? this.playerGrid : this.enemyGrid;
+        const adjacentIds = grid.getAdjacentItems(itemId);
+        
+        for (const adjacentId of adjacentIds) {
+            const adjacentItem = sourceSide === 'player'
+                ? this.playerItems.find(i => i.id === adjacentId)
+                : this.enemyItems.find(i => i.id === adjacentId);
+            
+            if (!adjacentItem || adjacentItem.destroyed) continue;
+
+            // Check for OnAdjacentTrigger effects
+            for (const effect of adjacentItem.effects) {
+                if (effect.trigger === TriggerTiming.OnAdjacentTrigger) {
+                    // Trigger immediately without re-scheduling
+                    this.eventLog.push({
+                        time: this.currentTime,
+                        type: 'item_trigger',
+                        itemId: adjacentId,
+                        target: sourceSide === 'player' ? 'enemy' : 'player',
+                        value: effect.value,
+                        description: `${adjacentItem.name} triggered by adjacent ${itemId}`
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Check if battle has ended
+     */
+    public checkBattleEnd(): 'player_win' | 'enemy_win' | 'draw' | null {
+        if (this.playerHp <= 0 && this.enemyHp <= 0) {
+            return 'draw';
+        }
+        if (this.playerHp <= 0) {
+            return 'enemy_win';
+        }
+        if (this.enemyHp <= 0) {
+            return 'player_win';
+        }
+        // Check timeout
+        if (this.currentTime >= this.maxDuration) {
+            const playerPercent = this.playerHp / 100;
+            const enemyPercent = this.enemyHp / 100;
+            
+            if (playerPercent > enemyPercent) {
+                return 'player_win';
+            } else if (enemyPercent > playerPercent) {
+                return 'enemy_win';
+            } else {
+                return 'draw';
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get current HP for a side
+     */
+    private getCurrentHp(side: 'player' | 'enemy'): number {
+        return side === 'player' ? this.playerHp : this.enemyHp;
+    }
+
+    /**
+     * Get max HP for a side
+     */
+    private getMaxHp(side: 'player' | 'enemy'): number {
+        return 100; // TODO: get from config
+    }
+
+    /**
+     * Run full battle to completion
+     */
+    public runFullBattle(): IBattleState {
+        let lastTime = 0;
+        
+        while (!this.isFinished) {
+            // Advance to next event
+            const event = this.advanceToNext();
+            
+            if (!event) {
+                break;
+            }
+
+            // Tick status effects from last time to current time
+            this.tickStatusEffects(lastTime, this.currentTime);
+            lastTime = this.currentTime;
+
+            // Resolve the event
+            this.resolveEvent(event);
+
+            // Check for battle end
+            const result = this.checkBattleEnd();
+            if (result) {
+                this.isFinished = true;
+                if (result === 'player_win') {
+                    this.result = 'win';
+                } else if (result === 'enemy_win') {
+                    this.result = 'lose';
+                } else {
+                    this.result = 'draw';
+                }
+            }
+        }
+
+        // Final tick for remaining effects
+        this.tickStatusEffects(lastTime, this.currentTime);
+
+        return this.getBattleState();
+    }
 }
