@@ -238,3 +238,6 @@ export type StatusEffect = IStatusEffect;
 export type TimelineEvent = ITimelineEvent;
 export type BattleState = IBattleState;
 export type ItemTemplate = IItemTemplate;
+
+/** 物品配置表类型（items.json 数组类型） */
+export type IItemConfig = IItemTemplate[];
