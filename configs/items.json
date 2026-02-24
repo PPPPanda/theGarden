@@ -1,0 +1,265 @@
+/**
+ * theGarden Item Configuration
+ * 10 garden-themed items with萌系Q弹 style
+ */
+{
+    "items": [
+        {
+            "templateId": "cactus",
+            "name": "🌵 仙人掌",
+            "description": "带刺的防御者，每次攻击反弹伤害",
+            "rarity": "common",
+            "size": "small",
+            "gridSize": { "rows": 1, "cols": 1 },
+            "cooldown": 3,
+            "effects": [
+                {
+                    "effectId": "cactus_damage",
+                    "trigger": "on_cooldown_complete",
+                    "target": "enemy",
+                    "type": "damage",
+                    "value": 8,
+                    "params": { "thorns": true }
+                }
+            ],
+            "emoji": "🌵",
+            "color": "#4CAF50",
+            "tier": 1,
+            "cost": 10
+        },
+        {
+            "templateId": "mushroom_poison",
+            "name": "🍄 毒蘑菇",
+            "description": "持续释放毒气伤害敌人",
+            "rarity": "uncommon",
+            "size": "small",
+            "gridSize": { "rows": 1, "cols": 1 },
+            "cooldown": 4,
+            "effects": [
+                {
+                    "effectId": "mushroom_poison",
+                    "trigger": "on_cooldown_complete",
+                    "target": "enemy",
+                    "type": "debuff",
+                    "value": 3,
+                    "params": { "statusType": "poison", "duration": 5 }
+                }
+            ],
+            "emoji": "🍄",
+            "color": "#9C27B0",
+            "tier": 2,
+            "cost": 15
+        },
+        {
+            "templateId": "sunflower",
+            "name": "🌻 向日葵",
+            "description": "温暖的光芒，持续治疗友军",
+            "rarity": "rare",
+            "size": "small",
+            "gridSize": { "rows": 1, "cols": 1 },
+            "cooldown": 5,
+            "effects": [
+                {
+                    "effectId": "sunflower_heal",
+                    "trigger": "on_cooldown_complete",
+                    "target": "self",
+                    "type": "heal",
+                    "value": 12
+                }
+            ],
+            "emoji": "🌻",
+            "color": "#FFEB3B",
+            "tier": 2,
+            "cost": 20
+        },
+        {
+            "templateId": "rose_thorn",
+            "name": "🌹 玫瑰荆棘",
+            "description": "美丽而致命，造成高额伤害",
+            "rarity": "epic",
+            "size": "medium",
+            "gridSize": { "rows": 1, "cols": 2 },
+            "cooldown": 4,
+            "effects": [
+                {
+                    "effectId": "rose_damage",
+                    "trigger": "on_cooldown_complete",
+                    "target": "enemy",
+                    "type": "damage",
+                    "value": 15
+                },
+                {
+                    "effectId": "rose_lifesteal",
+                    "trigger": "on_cooldown_complete",
+                    "target": "self",
+                    "type": "special",
+                    "value": 5,
+                    "params": { "lifesteal": true }
+                }
+            ],
+            "emoji": "🌹",
+            "color": "#E91E63",
+            "tier": 3,
+            "cost": 35
+        },
+        {
+            "templateId": "tree_shield",
+            "name": "🌲 盾墙树",
+            "description": "坚不可摧的防御，提供护盾",
+            "rarity": "rare",
+            "size": "large",
+            "gridSize": { "rows": 2, "cols": 2 },
+            "cooldown": 8,
+            "effects": [
+                {
+                    "effectId": "tree_shield_buff",
+                    "trigger": "on_cooldown_complete",
+                    "target": "self",
+                    "type": "buff",
+                    "value": 10,
+                    "params": { "duration": 6 }
+                }
+            ],
+            "emoji": "🌲",
+            "color": "#2E7D32",
+            "tier": 3,
+            "cost": 30
+        },
+        {
+            "templateId": "fire_flower",
+            "name": "🔥 火焰花",
+            "description": "灼烧敌人，造成持续火焰伤害",
+            "rarity": "epic",
+            "size": "small",
+            "gridSize": { "rows": 1, "cols": 1 },
+            "cooldown": 3,
+            "effects": [
+                {
+                    "effectId": "fire_burn",
+                    "trigger": "on_cooldown_complete",
+                    "target": "enemy",
+                    "type": "debuff",
+                    "value": 5,
+                    "params": { "statusType": "burn", "duration": 4 }
+                }
+            ],
+            "emoji": "🔥",
+            "color": "#FF5722",
+            "tier": 3,
+            "cost": 32
+        },
+        {
+            "templateId": "snowflake",
+            "name": "❄️ 冰雪花",
+            "description": "冰冻敌人，减缓其行动",
+            "rarity": "rare",
+            "size": "small",
+            "gridSize": { "rows": 1, "cols": 1 },
+            "cooldown": 6,
+            "effects": [
+                {
+                    "effectId": "snowflake_freeze",
+                    "trigger": "on_cooldown_complete",
+                    "target": "enemy",
+                    "type": "debuff",
+                    "value": 0,
+                    "params": { "statusType": "freeze", "duration": 3 }
+                }
+            ],
+            "emoji": "❄️",
+            "color": "#03A9F4",
+            "tier": 2,
+            "cost": 22
+        },
+        {
+            "templateId": "lightning_flower",
+            "name": "⚡ 闪电花",
+            "description": "高速攻击，急速状态",
+            "rarity": "legendary",
+            "size": "small",
+            "gridSize": { "rows": 1, "cols": 1 },
+            "cooldown": 2,
+            "effects": [
+                {
+                    "effectId": "lightning_damage",
+                    "trigger": "on_cooldown_complete",
+                    "target": "enemy",
+                    "type": "damage",
+                    "value": 6
+                },
+                {
+                    "effectId": "lightning_haste",
+                    "trigger": "on_cooldown_complete",
+                    "target": "self",
+                    "type": "buff",
+                    "value": 1,
+                    "params": { "statusType": "haste", "duration": 3 }
+                }
+            ],
+            "emoji": "⚡",
+            "color": "#FF9800",
+            "tier": 4,
+            "cost": 50
+        },
+        {
+            "templateId": "heart_flower",
+            "name": "💖 心形花",
+            "description": "强大的治疗效果，恢复生命",
+            "rarity": "epic",
+            "size": "medium",
+            "gridSize": { "rows": 1, "cols": 2 },
+            "cooldown": 7,
+            "effects": [
+                {
+                    "effectId": "heart_heal",
+                    "trigger": "on_cooldown_complete",
+                    "target": "self",
+                    "type": "heal",
+                    "value": 20
+                },
+                {
+                    "effectId": "heart_regen",
+                    "trigger": "on_cooldown_complete",
+                    "target": "self",
+                    "type": "debuff",
+                    "value": 4,
+                    "params": { "statusType": "regen", "duration": 5 }
+                }
+            ],
+            "emoji": "💖",
+            "color": "#F48FB1",
+            "tier": 4,
+            "cost": 45
+        },
+        {
+            "templateId": "mega_tree",
+            "name": "🌳 超级巨树",
+            "description": "花园终极防御，巨额护盾",
+            "rarity": "legendary",
+            "size": "large",
+            "gridSize": { "rows": 2, "cols": 2 },
+            "cooldown": 10,
+            "effects": [
+                {
+                    "effectId": "mega_shield",
+                    "trigger": "on_battle_start",
+                    "target": "self",
+                    "type": "buff",
+                    "value": 15,
+                    "params": { "duration": 10 }
+                },
+                {
+                    "effectId": "mega_heal",
+                    "trigger": "on_cooldown_complete",
+                    "target": "self",
+                    "type": "heal",
+                    "value": 8
+                }
+            ],
+            "emoji": "🌳",
+            "color": "#1B5E20",
+            "tier": 5,
+            "cost": 80
+        }
+    ]
+}

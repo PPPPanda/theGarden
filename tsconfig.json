@@ -10,6 +10,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "resolveJsonModule": true,
     "lib": ["ES2020", "DOM"]
   },
   "include": [
@@ -17,7 +18,9 @@
     "assets/scripts/utils/SeededRandom.ts",
     "assets/scripts/core/GridManager.ts",
     "assets/scripts/core/MinHeap.ts",
-    "assets/scripts/core/BattleEngine.ts"
+    "assets/scripts/core/BattleEngine.ts",
+    "assets/scripts/core/ItemDB.ts",
+    "configs/items.json"
   ],
   "exclude": [
     "node_modules",
@@ -25,7 +28,6 @@
     "**/*.spec.ts",
     "**/*.d.ts",
     "assets/scripts/core/GameManager.ts",
-    "assets/scripts/core/ItemDB.ts",
     "assets/scripts/ui/GridView.ts"
   ]
 }
