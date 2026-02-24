@@ -15,7 +15,9 @@
   "include": [
     "assets/scripts/core/types.ts",
     "assets/scripts/utils/SeededRandom.ts",
-    "assets/scripts/core/GridManager.ts"
+    "assets/scripts/core/GridManager.ts",
+    "assets/scripts/core/MinHeap.ts",
+    "assets/scripts/core/BattleEngine.ts"
   ],
   "exclude": [
     "node_modules",
