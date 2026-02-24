@@ -4,8 +4,8 @@
  * Adapts to new GridManager interface
  */
 
-import { IGridItem, IGridPosition, IGridSize, ItemRarity, ItemSize } from './types';
-import { GridManager } from './GridManager';
+import { IGridItem, IGridPosition, IGridSize, ItemRarity, ItemSize } from '../core/types';
+import { GridManager } from '../core/GridManager';
 
 interface GridCellView {
     x: number;

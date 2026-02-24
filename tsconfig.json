@@ -20,14 +20,14 @@
     "assets/scripts/core/MinHeap.ts",
     "assets/scripts/core/BattleEngine.ts",
     "assets/scripts/core/ItemDB.ts",
+    "assets/scripts/core/GameManager.ts",
+    "assets/scripts/ui/GridView.ts",
     "configs/items.json"
   ],
   "exclude": [
     "node_modules",
     "skills",
     "**/*.spec.ts",
-    "**/*.d.ts",
-    "assets/scripts/core/GameManager.ts",
-    "assets/scripts/ui/GridView.ts"
+    "**/*.d.ts"
   ]
 }
