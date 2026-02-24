@@ -14,7 +14,8 @@
   },
   "include": [
     "assets/scripts/core/types.ts",
-    "assets/scripts/utils/SeededRandom.ts"
+    "assets/scripts/utils/SeededRandom.ts",
+    "assets/scripts/core/GridManager.ts"
   ],
   "exclude": [
     "node_modules",
