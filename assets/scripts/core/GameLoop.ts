@@ -327,24 +327,33 @@ export class GameLoop {
 
     /**
      * Purchase from shop and place (handles gold deduction)
+     * Order: check → gold → place → mark purchased
      */
     public purchaseFromShop(slotIndex: number, position: IGridPosition): boolean {
-        // Get purchase result (doesn't deduct gold yet)
-        const result = this.shopManager.purchaseResult(slotIndex);
-        if (!result.success || !result.template) {
+        // 1. Check if purchasable (no side effects)
+        const check = this.shopManager.canPurchase(slotIndex);
+        if (!check) {
             return false;
         }
 
-        // Check if player has enough gold
-        if (this.playerGold < result.cost) {
+        // 2. Check gold
+        if (this.playerGold < check.cost) {
             return false;
         }
 
-        // Deduct gold
-        this.playerGold -= result.cost;
+        // 3. Try to place item first
+        const placed = this.purchaseAndPlace(check.template.templateId, position);
+        if (!placed) {
+            return false;
+        }
 
-        // Place item
-        return this.purchaseAndPlace(result.template.templateId, position);
+        // 4. Only mark purchased after successful placement
+        this.shopManager.markPurchased(slotIndex);
+        
+        // 5. Deduct gold last
+        this.playerGold -= check.cost;
+
+        return true;
     }
 
     /**
