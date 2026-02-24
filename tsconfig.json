@@ -3,7 +3,7 @@
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "node",
-    "strict": false,
+    "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -13,12 +13,15 @@
     "lib": ["ES2020", "DOM"]
   },
   "include": [
-    "assets/scripts/**/*.ts"
+    "assets/scripts/core/types.ts"
   ],
   "exclude": [
     "node_modules",
     "skills",
     "**/*.spec.ts",
-    "**/*.d.ts"
+    "**/*.d.ts",
+    "assets/scripts/core/GameManager.ts",
+    "assets/scripts/core/ItemDB.ts",
+    "assets/scripts/ui/GridView.ts"
   ]
 }

@@ -1,243 +1,255 @@
 /**
- * theGarden - Core Type Definitions
+ * theGarden — Core Type Definitions
  * Phase 2: 网格背包系统 + 单机战斗演算
+ * 与 docs/data-schema.md 保持一致
  */
 
-// ============= Enums =============
+// ============= Constants =============
+
+/** 网格行数 */
+export const GRID_ROWS = 10;
+/** 网格列数 */
+export const GRID_COLS = 10;
+
+// ============= Enums (String Values) =============
 
 /** 物品稀有度 */
 export enum ItemRarity {
-    Common = 0,     // 普通
-    Uncommon = 1,   // 优秀
-    Rare = 2,       // 稀有
-    Epic = 3,       // 史诗
-    Legendary = 4   // 传说
+    Common = 'common',
+    Uncommon = 'uncommon',
+    Rare = 'rare',
+    Epic = 'epic',
+    Legendary = 'legendary'
 }
 
-/** 物品类型 */
-export enum ItemType {
-    Weapon = 0,     // 武器
-    Armor = 1,      // 护甲
-    Consumable = 2, // 消耗品
-    Material = 3,   // 材料
-    Special = 4     // 特殊
-}
-
-/** 效果类型 */
-export enum EffectType {
-    Damage = 0,         // 伤害
-    Heal = 1,           // 治疗
-    Shield = 2,         // 护盾
-    Buff = 3,           // 增益
-    Debuff = 4,         // 减益
-    Draw = 5,           // 抽牌
-    Energy = 6,         // 能量
-    Poison = 7,         // 中毒
-    Stun = 8,           // 眩晕
-    Drain = 9           // 吸血
-}
-
-/** 效果目标类型 */
-export enum EffectTarget {
-    Self = 0,       // 自身
-    Enemy = 1,      // 敌人
-    Ally = 2,       // 友军
-    AllEnemies = 3, // 所有敌人
-    AllAllies = 4   // 所有友军
+/** 物品尺寸 */
+export enum ItemSize {
+    Small = 'small',   // 1×1
+    Medium = 'medium', // 2×1 or 1×2
+    Large = 'large'    // 2×2
 }
 
 /** 状态效果类型 */
-export enum StatusType {
-    Poison = 0,     // 中毒
-    Burn = 1,       // 燃烧
-    Frozen = 2,     // 冰冻
-    Stunned = 3,    // 眩晕
-    Shielded = 4,   // 护盾
-    Powered = 5,    // 强化
-    Weakened = 6,   // 虚弱
-    Regenerating = 7 // 再生
+export enum StatusEffectType {
+    Charge = 'charge',  // 充能
+    Haste = 'haste',   // 急速
+    Freeze = 'freeze', // 冰冻
+    Slow = 'slow',     // 减速
+    Poison = 'poison', // 中毒
+    Shield = 'shield', // 护盾
+    Burn = 'burn',     // 灼烧
+    Regen = 'regen'    // 再生
 }
 
-/** 时间轴事件类型 */
-export enum TimelineEventType {
-    Damage = 0,         // 伤害事件
-    Heal = 1,           // 治疗事件
-    EffectApplied = 2,  // 效果应用
-    EffectRemoved = 3,  // 效果移除
-    TurnStart = 4,      // 回合开始
-    TurnEnd = 5,        // 回合结束
-    ItemUsed = 6,       // 物品使用
-    ItemPlaced = 7,     // 物品放置
-    ItemRemoved = 8,    // 物品移除
-    BattleStart = 9,    // 战斗开始
-    BattleEnd = 10      // 战斗结束
-}
-
-/** 网格位置 */
-export interface IGridPosition {
-    x: number;
-    y: number;
-}
-
-/** 网格尺寸 */
-export interface IGridSize {
-    width: number;
-    height: number;
-}
-
-// ============= Item Effects =============
-
-/** 物品效果定义（配置表用） */
-export interface IItemEffect {
-    type: EffectType;           // 效果类型
-    value: number;              // 效果数值
-    target: EffectTarget;       // 目标类型
-    duration?: number;          // 持续时间（回合）
-    chance?: number;            // 触发概率 (0-1)
-    scaling?: number;           // 数值 scaling（基于等级等）
-    description?: string;       // 效果描述
-}
-
-// ============= Status Effects =============
-
-/** 运行时状态效果 */
-export interface IStatusEffect {
-    type: StatusType;           // 状态类型
-    duration: number;            // 持续时间（回合）
-    remaining: number;           // 剩余回合
-    stackCount: number;          // 堆叠层数
-    source: string;              // 来源（物品ID等）
-    value?: number;              // 数值（如伤害/治疗量）
-}
-
-// ============= Item Template =============
-
-/** 物品模板（配置表 items.json 使用） */
-export interface IItemTemplate {
-    id: string;                  // 物品唯一ID (如 "sword_001")
-    templateId: string;          // 模板ID (如 "sword")
-    name: string;                // 显示名称
-    description?: string;        // 物品描述
-    type: ItemType;              // 物品类型
-    rarity: ItemRarity;           // 稀有度
-    size: IGridSize;             // 物品占据的网格大小
-    cooldown?: number;           // 冷却时间（回合）
-    maxCooldown?: number;        // 最大冷却时间
-    effects: IItemEffect[];      // 效果列表
-    level?: number;              // 物品等级
-    upgradeId?: string;          // 升级后物品ID
-    sellPrice?: number;          // 售价
-    buyPrice?: number;           // 购入价格
-    icon?: string;               // 图标资源路径
-    tags?: string[];             // 标签
-}
-
-// ============= Grid Item =============
-
-/** 物品实例（运行时用） */
-export interface IGridItem {
-    id: string;                          // 物品实例唯一ID
-    templateId: string;                 // 模板ID
-    name: string;                       // 显示名称
-    rarity: ItemRarity;                  // 稀有度
-    size: IGridSize;                    // 物品占据的网格大小
-    gridSize: IGridSize;                // 同上，兼容写法
-    position: IGridPosition;             // 网格位置
-    cooldown: number;                   // 冷却时间（回合）
-    currentCooldown: number;            // 当前剩余冷却
-    effects: IItemEffect[];             // 物品效果
-    level: number;                      // 物品等级
-    destroyed: boolean;                 // 是否已销毁
-    enchantments?: IEnchantment[];      // 附魔效果
-    instanceId?: string;                // 实例ID（别名）
-}
-
-/** 附魔效果 */
-export interface IEnchantment {
-    id: string;              // 附魔ID
-    name: string;            // 附魔名称
-    effects: IItemEffect[]; // 附魔带来的效果
-    level: number;           // 附魔等级
-}
-
-// ============= Timeline Events =============
-
-/** 时间轴事件 */
-export interface ITimelineEvent {
-    time: number;                    // 事件发生的时间点（毫秒）
-    sourceItemId?: string;           // 触发事件的物品ID
-    type: TimelineEventType;         // 事件类型
-    value: number;                   // 事件数值（如伤害值）
-    target: string;                  // 目标（玩家/敌人ID）
-    description?: string;            // 事件描述
-    effects?: IItemEffect[];         // 附带效果
-}
-
-// ============= Battle State =============
-
-/** 战斗状态快照 */
-export interface IBattleState {
-    playerHp: number;                 // 玩家当前生命值
-    enemyHp: number;                 // 敌人当前生命值
-    maxHp: number;                   // 最大生命值
-    playerItems: IGridItem[];       // 玩家物品列表
-    enemyItems: IGridItem[];         // 敌人物品列表
-    currentTime: number;             // 当前战斗时间（毫秒）
-    maxTime: number;                 // 最大战斗时间
-    eventLog: ITimelineEvent[];      // 事件日志
-    randomSeed: number;              // 随机种子
-    activeEffects: IStatusEffect[]; // 活跃的状态效果
-    playerEnergy?: number;           // 玩家能量
-    enemyEnergy?: number;            // 敌人能量
-    turn?: number;                   // 当前回合
-    isPlayerTurn?: boolean;          // 是否玩家回合
+/** 效果触发时机 */
+export enum TriggerTiming {
+    OnCooldownComplete = 'on_cooldown_complete', // 冷却完成
+    OnBattleStart = 'on_battle_start',          // 战斗开始
+    OnDamageTaken = 'on_damage_taken',          // 受伤时
+    OnDamageDealt = 'on_damage_dealt',          // 造成伤害时
+    OnItemDestroyed = 'on_item_destroyed',       // 物品被摧毁
+    OnAdjacentTrigger = 'on_adjacent_trigger',  // 相邻物品触发
+    OnHeal = 'on_heal',                        // 治疗时
+    Passive = 'passive'                         // 被动常驻
 }
 
 // ============= Grid System =============
 
+/** 网格坐标 */
+export interface IGridPosition {
+    row: number; // 行（0 = 底部）
+    col: number; // 列（0 = 左侧）
+}
+
+/** 物品占位尺寸 */
+export interface IGridSize {
+    rows: number; // 占据行数
+    cols: number; // 占据列数
+}
+
 /** 网格单元格 */
 export interface IGridCell {
-    x: number;
-    y: number;
+    position: IGridPosition;
     occupied: boolean;
-    itemId?: string;
+    itemId: string | null;
 }
 
-/** 网格系统配置 */
-export interface IGridConfig {
-    width: number;
-    height: number;
-    cellSize: number;
+/** 网格背包 */
+export interface IGrid {
+    rows: number;
+    cols: number;
+    cells: IGridCell[][];
 }
 
-// ============= Battle Configuration =============
+// ============= Item System =============
 
-/** 战斗配置 */
-export interface IBattleConfig {
-    maxTime: number;             // 最大战斗时间（毫秒）
-    maxHp: number;               // 最大生命值
-    initialEnergy: number;      // 初始能量
-    maxEnergy: number;          // 最大能量
-    energyPerTurn: number;      // 每回合恢复能量
-    randomSeed: number;         // 随机种子
+/** 物品效果 */
+export interface IItemEffect {
+    effectId: string;                           // 效果 ID
+    trigger: TriggerTiming;                   // 触发时机
+    target: string;                            // 目标：self/enemy/adjacent/all_allies
+    type: string;                              // 类型：damage/heal/buff/debuff/special
+    value: number;                             // 数值
+    params?: Record<string, unknown>;           // 额外参数
 }
 
-// ============= Serialization =============
-
-/** 可序列化接口（用于存档） */
-export interface ISerializable {
-    serialize(): string;
-    deserialize(data: string): void;
+/** 物品基类 */
+export interface IGridItem {
+    id: string;                // 唯一实例 ID
+    templateId: string;       // 模板 ID
+    name: string;              // 名称
+    description: string;       // 描述
+    rarity: ItemRarity;        // 稀有度
+    size: ItemSize;            // 尺寸类型
+    gridSize: IGridSize;       // 实际占位
+    position: IGridPosition;   // 网格中锚点（左下角）
+    cooldown: number;          // 冷却时间（秒）
+    currentCooldown: number;   // 当前冷却进度
+    effects: IItemEffect[];    // 效果列表
+    level: number;             // 物品等级
+    destroyed: boolean;       // 是否已摧毁
+    enchantments: string[];    // 附魔数据
 }
 
-// ============= Export all types for convenience =============
+// ============= Item Template (Config) =============
+
+/** 物品模板（配置表 items.json 使用） */
+export interface IItemTemplate {
+    templateId: string;           // 模板 ID
+    name: string;                // 名称
+    description: string;         // 描述
+    rarity: ItemRarity;          // 稀有度
+    size: ItemSize;              // 尺寸类型
+    gridSize: IGridSize;         // 实际占位
+    cooldown: number;            // 冷却时间（秒）
+    effects: IItemEffect[];      // 效果列表
+    emoji?: string;              // emoji 图标
+    cost?: number;               // 花费
+    color?: string;              // 颜色
+    tier?: number;               // 等级
+    icon?: string;               // 图标路径
+}
+
+/** 物品配置表类型 */
+export type IItemConfig = IItemTemplate[];
+
+// ============= Player State =============
+
+/** 英雄属性 */
+export interface IHeroStats {
+    maxHealth: number;
+    currentHealth: number;
+    baseAttack: number;
+    baseDefense: number;
+}
+
+/** 玩家完整状态 */
+export interface IPlayerState {
+    playerId: string;           // 玩家 ID
+    nickname: string;            // 昵称
+    hero: IHeroStats;            // 英雄属性
+    grid: IGrid;                 // 网格背包
+    items: IGridItem[];          // 物品列表
+    gold: number;                // 金币
+    day: number;                 // 当前天数
+    wins: number;                // 累计胜场
+    losses: number;              // 累计败场
+    mmr: number;                // 隐藏匹配分
+    shopRefreshes: number;       // 商店剩余刷新次数
+}
+
+// ============= Battle System =============
+
+/** 战斗中状态效果实例 */
+export interface IStatusEffect {
+    type: StatusEffectType;     // 效果类型
+    duration: number;            // 剩余持续时间（秒）
+    value: number;               // 效果强度
+    sourceItemId: string;        // 来源物品 ID
+    stacks: number;              // 叠加层数
+}
+
+/** 时间轴事件类型 */
+export type TimelineEventType = 
+    | 'item_trigger' 
+    | 'effect_tick' 
+    | 'status_apply' 
+    | 'status_expire' 
+    | 'damage' 
+    | 'heal';
+
+/** 时间轴事件 */
+export interface ITimelineEvent {
+    time: number;                 // 触发时间（秒）
+    type: TimelineEventType;     // 事件类型
+    itemId?: string;             // 关联物品
+    target: 'player' | 'enemy';  // 目标
+    value: number;               // 事件数值
+    description: string;         // 描述
+}
+
+/** 战斗状态 */
+export interface IBattleState {
+    battleId: string;                    // 战斗 ID
+    player: IPlayerState;                 // 玩家方快照
+    opponent: IPlayerState;               // 对手方快照
+    currentTime: number;                  // 当前时间（秒）
+    maxDuration: number;                  // 最大时长
+    timeline: ITimelineEvent[];           // 事件队列
+    eventLog: ITimelineEvent[];           // 已执行事件（回放用）
+    playerEffects: IStatusEffect[];        // 玩家状态效果栈
+    opponentEffects: IStatusEffect[];      // 对手状态效果栈
+    isFinished: boolean;                  // 是否结束
+    result: 'win' | 'lose' | 'draw' | null;
+    randomSeed: number;                   // 随机种子
+}
+
+// ============= Ghost Data (Async PvP) =============
+
+/** 幽灵物品（精简版） */
+export interface IGhostItem {
+    templateId: string;
+    position: IGridPosition;
+    gridSize: IGridSize;
+    level: number;
+    enchantments: string[];
+}
+
+/** 幽灵快照 */
+export interface IGhostData {
+    ghostId: string;           // 幽灵 ID
+    playerId: string;          // 原始玩家 ID
+    nickname: string;          // 昵称
+    day: number;              // 快照天数
+    mmr: number;              // 快照时 MMR
+    hero: IHeroStats;         // 英雄属性
+    gridSize: IGridSize;
+    items: IGhostItem[];     // 精简物品列表
+    timestamp: number;        // 生成时间戳
+    version: number;          // 数据版本号
+}
+
+// ============= Shop System =============
+
+/** 商店槽位 */
+export interface IShopSlot {
+    index: number;             // 槽位索引
+    templateId: string;        // 物品模板 ID
+    price: number;             // 价格
+    purchased: boolean;        // 已购买
+    locked: boolean;           // 已锁定
+}
+
+/** 商店状态 */
+export interface IShopState {
+    slots: IShopSlot[];        // 物品槽位
+    refreshCost: number;       // 刷新价格
+    refreshCount: number;      // 已刷新次数
+}
+
+// ============= Type Aliases for Convenience =============
 
 export type GridItem = IGridItem;
 export type ItemEffect = IItemEffect;
-export type StatusEffect = IStatusEffect;
-export type TimelineEvent = ITimelineEvent;
 export type BattleState = IBattleState;
 export type ItemTemplate = IItemTemplate;
-
-/** 物品配置表类型（items.json 数组类型） */
-export type IItemConfig = IItemTemplate[];
