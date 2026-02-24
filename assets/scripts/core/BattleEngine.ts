@@ -104,12 +104,15 @@ export class BattleEngine {
     }
 
     /**
-     * Process an item and schedule its effects
+     * Process an item and schedule its effects (per-item, not per-effect)
      */
     private processItem(item: IGridItem, side: 'player' | 'enemy'): void {
-        for (const effect of item.effects) {
-            if (effect.trigger === TriggerTiming.OnBattleStart) {
-                // Execute immediately at battle start
+        // Collect all OnBattleStart effects
+        const battleStartEffects = item.effects.filter(e => e.trigger === TriggerTiming.OnBattleStart);
+        
+        if (battleStartEffects.length > 0) {
+            // Execute all OnBattleStart effects immediately at battle start
+            for (const effect of battleStartEffects) {
                 const event: ITimelineEvent = {
                     time: this.currentTime,
                     type: 'item_trigger',
@@ -119,20 +122,23 @@ export class BattleEngine {
                     description: `${item.name} triggers ${effect.type} at battle start`
                 };
                 this.eventLog.push(event);
-            } else if (effect.trigger === TriggerTiming.Passive) {
-                // Passive effects are always active, no scheduling needed
-            } else {
-                // Schedule based on cooldown
-                const effectiveCooldown = this.getEffectiveCooldown(item.cooldown, side === 'player' ? this.playerEffects : this.enemyEffects);
-                if (effectiveCooldown > 0) {
-                    const initialDelay = effectiveCooldown * 0.5;
-                    this.eventTimeline.insert({
-                        time: initialDelay,
-                        itemId: item.id,
-                        side,
-                        effects: [effect]
-                    });
-                }
+            }
+        }
+
+        // Schedule cooldown-based triggers (per-item, not per-effect)
+        const cooldownEffects = item.effects.filter(e => e.trigger === TriggerTiming.OnCooldownComplete || e.trigger === TriggerTiming.Passive);
+        
+        if (cooldownEffects.length > 0) {
+            // Schedule ONE entry per item, carrying all effects
+            const effectiveCooldown = this.getEffectiveCooldown(item.cooldown, side === 'player' ? this.playerEffects : this.enemyEffects);
+            if (effectiveCooldown > 0 && effectiveCooldown !== Infinity) {
+                const initialDelay = effectiveCooldown * 0.5;
+                this.eventTimeline.insert({
+                    time: initialDelay,
+                    itemId: item.id,
+                    side,
+                    effects: cooldownEffects // ALL cooldown/passive effects together
+                });
             }
         }
     }
@@ -226,22 +232,24 @@ export class BattleEngine {
     }
 
     /**
-     * Schedule next trigger for an item
+     * Schedule next trigger for an item (per-item, not per-effect)
      */
     private scheduleItemTrigger(item: IGridItem, side: 'player' | 'enemy'): void {
         const effects = side === 'player' ? this.playerEffects : this.enemyEffects;
         
-        for (const effect of item.effects) {
-            if (effect.trigger === TriggerTiming.OnCooldownComplete) {
-                const effectiveCooldown = this.getEffectiveCooldown(item.cooldown, effects);
-                if (effectiveCooldown < Infinity) {
-                    this.eventTimeline.insert({
-                        time: this.currentTime + effectiveCooldown,
-                        itemId: item.id,
-                        side,
-                        effects: [effect]
-                    });
-                }
+        // Collect all OnCooldownComplete effects
+        const cooldownEffects = item.effects.filter(e => e.trigger === TriggerTiming.OnCooldownComplete);
+        
+        if (cooldownEffects.length > 0) {
+            const effectiveCooldown = this.getEffectiveCooldown(item.cooldown, effects);
+            if (effectiveCooldown > 0 && effectiveCooldown !== Infinity) {
+                // Schedule ONE entry per item, carrying all effects
+                this.eventTimeline.insert({
+                    time: this.currentTime + effectiveCooldown,
+                    itemId: item.id,
+                    side,
+                    effects: cooldownEffects // ALL effects together
+                });
             }
         }
     }
