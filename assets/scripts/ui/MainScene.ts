@@ -7,6 +7,7 @@ import { _decorator, Component, Node } from 'cc';
 import { GameLoop, GamePhase, getGameLoop } from '../core/GameLoop';
 import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
+import { BattlePanel, BattlePanelState } from './BattlePanel';
 import { IGridItem, IItemTemplate, IShopSlot } from '../core/types';
 
 const { ccclass, property } = _decorator;
@@ -38,6 +39,9 @@ export class MainScene extends Component {
         this.playerGridView.init();
         this.enemyGridView.init();
         
+        // Initialize battle panel
+        this.initBattlePanel();
+        
         this.isInitialized = true;
     }
 
@@ -55,6 +59,9 @@ export class MainScene extends Component {
     onDestroy(): void {
         this.playerGridView.destroy();
         this.enemyGridView.destroy();
+        if (this.battlePanel) {
+            this.battlePanel.hide();
+        }
         this.isInitialized = false;
     }
 
@@ -68,6 +75,9 @@ export class MainScene extends Component {
 
     @property({ type: Node, tooltip: 'UI layer node' })
     public uiLayerNode: Node | null = null;
+
+    @property({ type: BattlePanel, tooltip: 'Battle panel component' })
+    public battlePanel: BattlePanel | null = null;
 
     // ============= Private Fields =============
 
@@ -251,6 +261,105 @@ export class MainScene extends Component {
      */
     public getBattleResult() {
         return this.gameLoop.getBattleResult();
+    }
+
+    // ============= Battle Panel Integration =============
+
+    /**
+     * Initialize battle panel
+     */
+    public initBattlePanel(): void {
+        if (this.battlePanel) {
+            this.battlePanel.init(this.gameLoop);
+        }
+    }
+
+    /**
+     * Show battle start UI
+     */
+    public showBattleStartUI(): void {
+        if (this.battlePanel) {
+            // Get current battle engine
+            const playerItems = this.gameLoop.getPlayerItems();
+            const enemyItems = this.gameLoop.getEnemyItems();
+            
+            // Create battle engine (same as in GameLoop.startBattle)
+            const { BattleEngine } = require('../core/BattleEngine');
+            const battleEngine = new BattleEngine({
+                playerItems,
+                enemyItems,
+                playerGrid: this.gameLoop.getPlayerGrid(),
+                enemyGrid: this.gameLoop.getEnemyGrid(),
+                seed: this.gameLoop.getDay() + Date.now(),
+                maxDuration: 60,
+                playerHp: 100,
+                enemyHp: 100
+            });
+            
+            this.battlePanel.startBattle(battleEngine);
+        }
+    }
+
+    /**
+     * Advance battle (single step)
+     */
+    public advanceBattleStep(): boolean {
+        if (this.battlePanel) {
+            return this.battlePanel.advanceBattle();
+        }
+        return false;
+    }
+
+    /**
+     * Run full battle with UI
+     */
+    public runBattleWithUI() {
+        // Show battle start
+        this.showBattleStartUI();
+        
+        // Run full battle
+        const result = this.gameLoop.runFullBattle();
+        
+        // Update battle panel with result
+        if (this.battlePanel) {
+            this.battlePanel.runFullBattle();
+        }
+        
+        // Update views
+        this.playerGridView.refresh();
+        this.enemyGridView.refresh();
+        
+        return result;
+    }
+
+    /**
+     * Hide battle panel
+     */
+    public hideBattlePanel(): void {
+        if (this.battlePanel) {
+            this.battlePanel.hide();
+        }
+    }
+
+    /**
+     * Get battle panel state
+     */
+    public getBattlePanelState(): BattlePanelState | null {
+        return this.battlePanel?.getState() ?? null;
+    }
+
+    /**
+     * Is battle in progress
+     */
+    public isBattleInProgress(): boolean {
+        return this.battlePanel?.isBattleInProgress() ?? false;
+    }
+
+    /**
+     * Is battle finished
+     */
+    public isBattleFinished(): boolean {
+        return this.battlePanel?.isBattleFinished() ?? false;
     }
 
     // ============= Result Phase =============
