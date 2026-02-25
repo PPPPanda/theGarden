@@ -1,26 +1,24 @@
 /**
- * MainScene - Main Game Scene
+ * MainScene - Main Game Scene (Cocos Component)
  * Coordinates all game systems and UI
  */
 
+import { _decorator, Component, Node } from 'cc';
 import { GameLoop, GamePhase, getGameLoop } from '../core/GameLoop';
 import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
 import { IGridItem, IItemTemplate, IShopSlot } from '../core/types';
 
-/**
- * Main Scene - orchestrates all game components
- */
-export class MainScene {
-    private gameLoop: GameLoop;
-    private playerGridView: GridView;
-    private enemyGridView: GridView;
-    private isInitialized: boolean = false;
+const { ccclass, property } = _decorator;
+
+@ccclass('MainScene')
+export class MainScene extends Component {
+    // ============= Cocos Lifecycle =============
 
     /**
-     * @param container - Cocos node to attach to
+     * Called when the component is loaded
      */
-    constructor(container?: any) {
+    onLoad(): void {
         // Initialize game loop
         this.gameLoop = getGameLoop();
         
@@ -30,9 +28,9 @@ export class MainScene {
     }
 
     /**
-     * Initialize the scene
+     * Called after onLoad, when the component is enabled
      */
-    public init(): void {
+    start(): void {
         // Start first day
         this.gameLoop.startDay();
         
@@ -42,6 +40,41 @@ export class MainScene {
         
         this.isInitialized = true;
     }
+
+    /**
+     * Called every frame
+     * @param deltaTime - Time in seconds since last frame
+     */
+    update(deltaTime: number): void {
+        // Can be used for game loop updates if needed
+    }
+
+    /**
+     * Called when the component is destroyed
+     */
+    onDestroy(): void {
+        this.playerGridView.destroy();
+        this.enemyGridView.destroy();
+        this.isInitialized = false;
+    }
+
+    // ============= Properties (Cocos) =============
+
+    @property({ type: Node, tooltip: 'Player grid container node' })
+    public playerGridNode: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Enemy grid container node' })
+    public enemyGridNode: Node | null = null;
+
+    @property({ type: Node, tooltip: 'UI layer node' })
+    public uiLayerNode: Node | null = null;
+
+    // ============= Private Fields =============
+
+    private gameLoop!: GameLoop;
+    private playerGridView!: GridView;
+    private enemyGridView!: GridView;
+    private isInitialized: boolean = false;
 
     /**
      * Get current game phase
