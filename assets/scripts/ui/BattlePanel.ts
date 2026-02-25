@@ -163,10 +163,10 @@ export class BattlePanel extends Component {
      */
     public startBattle(battleEngine: BattleEngine): void {
         this.battleEngine = battleEngine;
-        this.state = BattlePanelState.InProgress;
-        
-        // Show battle UI
+
+        // Show battle UI first, then enter in-progress state
         this.showBattleStart();
+        this.state = BattlePanelState.InProgress;
     }
 
     /**
@@ -251,7 +251,7 @@ export class BattlePanel extends Component {
      */
     private finishBattle(): void {
         this.state = BattlePanelState.ShowingResult;
-        
+
         // Get final state
         const finalState = this.battleEngine?.getBattleState();
         if (finalState) {
@@ -263,8 +263,27 @@ export class BattlePanel extends Component {
 
         // Show result panel
         this.setPanelVisible(this.resultPanel, true);
-        
+
         // Update result display
+        this.updateResultDisplay();
+    }
+
+    /**
+     * Show final battle result using externally resolved data.
+     * Used by MainScene state machine when GameLoop resolves battle.
+     */
+    public showResolvedResult(state: IBattleState, result: BattleResult | null): void {
+        this.state = BattlePanelState.ShowingResult;
+        this.currentBattleState = state;
+        this.battleResult = result;
+        this.eventLog = [...state.eventLog];
+
+        this.setPanelVisible(this.battleContainer, true);
+        this.setPanelVisible(this.battleInfoPanel, true);
+        this.setPanelVisible(this.eventLogPanel, true);
+        this.setPanelVisible(this.resultPanel, true);
+
+        this.refreshEventLogDisplay();
         this.updateResultDisplay();
     }
 

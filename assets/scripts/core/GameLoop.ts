@@ -14,8 +14,10 @@ import { SeededRandom } from '../utils/SeededRandom';
  * Game Phase
  */
 export enum GamePhase {
+    Loading = 'loading',
     Shop = 'shop',
-    Prepare = 'prepare',
+    Grid = 'grid',
+    Prepare = 'grid', // alias for backward compatibility
     Battle = 'battle',
     Result = 'result',
     GameOver = 'gameover'
@@ -51,7 +53,7 @@ export class GameLoop {
     private playerMmr: number = 1000;
     private playerWins: number = 0;
     private playerLosses: number = 0;
-    private phase: GamePhase = GamePhase.Shop;
+    private phase: GamePhase = GamePhase.Loading;
     private seed: number;
     
     // Battle state
@@ -95,10 +97,24 @@ export class GameLoop {
     }
 
     /**
+     * Enter grid arrangement phase
+     */
+    public enterGridPhase(): void {
+        this.phase = GamePhase.Grid;
+    }
+
+    /**
      * Get shop manager
      */
     public getShopManager(): ShopManager {
         return this.shopManager;
+    }
+
+    /**
+     * Get item database
+     */
+    public getItemDB(): ItemDB {
+        return this.itemDB;
     }
 
     /**
@@ -291,6 +307,13 @@ export class GameLoop {
      */
     public getLastBattleState(): IBattleState | null {
         return this.lastBattleState;
+    }
+
+    /**
+     * Get current battle engine (if battle already started)
+     */
+    public getCurrentBattleEngine(): BattleEngine | null {
+        return this.currentBattle;
     }
 
     /**
