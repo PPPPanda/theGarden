@@ -4,6 +4,10 @@
  */
 
 import { _decorator, Component, Node, Graphics, Label, Color, UITransform, EventTouch, Sprite, SpriteFrame } from 'cc';
+import { GridManager } from '../core/GridManager';
+import { ItemDB } from '../core/ItemDB';
+import { GameLoop } from '../core/GameLoop';
+import { IGridItem, IItemTemplate } from '../core/types';
 
 const { ccclass, property } = _decorator;
 
@@ -24,9 +28,9 @@ export class GridPanelComp extends Component {
     @property({ type: Number, tooltip: 'Selected border width' })
     public selectedBorderWidth: number = 3;
 
-    private gridManager: any = null;
-    private itemDB: any = null;
-    private gameLoop: any = null;
+    private gridManager: GridManager | null = null;
+    private itemDB: ItemDB | null = null;
+    private gameLoop: GameLoop | null = null;
     private cellNodes: Map<string, Node> = new Map();
     private selectedItemId: string | null = null;
     private cellSize: number = 50;
@@ -36,7 +40,7 @@ export class GridPanelComp extends Component {
     /**
      * Initialize with dependencies
      */
-    public init(gridManager: any, itemDB: any, gameLoop: any): void {
+    public init(gridManager: GridManager, itemDB: ItemDB, gameLoop: GameLoop): void {
         this.gridManager = gridManager;
         this.itemDB = itemDB;
         this.gameLoop = gameLoop;
@@ -48,10 +52,13 @@ export class GridPanelComp extends Component {
     }
 
     /**
-     * onLoad lifecycle
+     * onLoad lifecycle - only create cells if not initialized
      */
     public onLoad(): void {
-        this.createCells();
+        // Only create cells if init hasn't been called yet
+        if (!this.gridManager) {
+            this.createCells();
+        }
     }
 
     /**
@@ -91,9 +98,10 @@ export class GridPanelComp extends Component {
         const transform: any = cellNode.addComponent(UITransform);
         transform.setContentSize(this.cellSize, this.cellSize);
 
-        // Position
+        // Position (flip row so row 0 = bottom in visual)
+        const visualRow = (this.rows - 1) - row;
         const x = this.cellGap + col * (this.cellSize + this.cellGap);
-        const y = this.cellGap + row * (this.cellSize + this.cellGap);
+        const y = this.cellGap + visualRow * (this.cellSize + this.cellGap);
         cellNode.setPosition(x, -y, 0);
 
         // Add Graphics for background
