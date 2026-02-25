@@ -25,6 +25,7 @@
   ],
   "exclude": [
     "node_modules",
-    "skills"
+    "skills",
+    "assets/scripts/ui/GridPanelComp.ts"
   ]
 }
