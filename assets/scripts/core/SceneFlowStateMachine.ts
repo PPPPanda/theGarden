@@ -155,4 +155,23 @@ export class SceneFlowStateMachine {
     public advance(context: SceneStageContext = {}): SceneTransitionResult {
         return this.transitionTo(this.getNextCycleStage(), context);
     }
+
+    /**
+     * Check if stage is a terminal state that needs user action to proceed
+     */
+    public isWaitingForUser(stage: SceneStage = this.currentStage): boolean {
+        return stage === SceneStage.Shop || stage === SceneStage.Grid || stage === SceneStage.Result;
+    }
+
+    /**
+     * Get the stage that should follow a completed phase automatically
+     */
+    public getAutoAdvanceStage(stage: SceneStage = this.currentStage): SceneStage | null {
+        // Auto-advance from Loading to Shop
+        if (stage === SceneStage.Loading) {
+            return SceneStage.Shop;
+        }
+        // Battle auto-advances to Result when battle finishes (handled externally)
+        return null;
+    }
 }
