@@ -20,17 +20,7 @@
     "lib": ["ES2020", "DOM"]
   },
   "include": [
-    "assets/scripts/core/types.ts",
-    "assets/scripts/utils/SeededRandom.ts",
-    "assets/scripts/core/GridManager.ts",
-    "assets/scripts/core/MinHeap.ts",
-    "assets/scripts/core/BattleEngine.ts",
-    "assets/scripts/core/ItemDB.ts",
-    "assets/scripts/core/GameManager.ts",
-    "assets/scripts/core/ShopManager.ts",
-    "assets/scripts/core/GameLoop.ts",
-    "assets/scripts/ui/GridView.ts",
-    "assets/scripts/ui/MainScene.ts",
+    "assets/scripts/**/*.ts",
     "configs/items.json"
   ],
   "exclude": [
