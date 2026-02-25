@@ -11,6 +11,12 @@
     "declarationMap": true,
     "sourceMap": true,
     "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
+    "paths": {
+      "cc": ["assets/scripts/cc.d.ts"]
+    },
     "lib": ["ES2020", "DOM"]
   },
   "include": [
@@ -29,8 +35,6 @@
   ],
   "exclude": [
     "node_modules",
-    "skills",
-    "**/*.spec.ts",
-    "**/*.d.ts"
+    "skills"
   ]
 }
