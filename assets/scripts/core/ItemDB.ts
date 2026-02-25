@@ -15,8 +15,9 @@ import itemConfig from '../../../configs/items.json';
 export class ItemDB {
     private templates: Map<string, IItemTemplate> = new Map();
     private random: SeededRandom;
+    private itemCounter: number = 0;
 
-    constructor(seed: number = Date.now()) {
+    constructor(seed: number = 42) {
         this.random = new SeededRandom(seed);
         this.loadTemplates();
     }
@@ -55,7 +56,7 @@ export class ItemDB {
         }
 
         return {
-            id: id ?? `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: id ?? `item_${templateId}_${this.itemCounter++}`,
             templateId: template.templateId,
             name: template.name,
             description: template.description,

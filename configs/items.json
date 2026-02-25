@@ -217,7 +217,7 @@
                     "effectId": "heart_regen",
                     "trigger": "on_cooldown_complete",
                     "target": "self",
-                    "type": "debuff",
+                    "type": "buff",
                     "value": 4,
                     "params": { "statusType": "regen", "duration": 5 }
                 }

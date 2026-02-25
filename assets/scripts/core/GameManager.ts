@@ -26,7 +26,7 @@ export class GameManager {
     private maxDuration: number = 60;
 
     constructor(seed?: number) {
-        this.seed = seed ?? Math.floor(Math.random() * 100000);
+        this.seed = seed ?? 42;
         this.random = new SeededRandom(this.seed);
         this.playerGrid = new GridManager(10, 10);
         this.enemyGrid = new GridManager(10, 10);
@@ -218,7 +218,7 @@ export class GameManager {
         this.playerHp = 100;
         this.enemyHp = 100;
         this.isInBattle = false;
-        this.seed = Math.floor(Math.random() * 100000);
+        this.seed = 42;
         this.random = new SeededRandom(this.seed);
     }
 

@@ -64,7 +64,7 @@ export class GameLoop {
     private maxDuration: number = 60;
 
     constructor(seed?: number) {
-        this.seed = seed ?? Date.now();
+        this.seed = seed ?? 42;
         this.random = new SeededRandom(this.seed);
         this.playerGrid = new GridManager(this.gridSize, this.gridSize);
         this.enemyGrid = new GridManager(this.gridSize, this.gridSize);
@@ -191,7 +191,7 @@ export class GameLoop {
                 const item = this.itemDB.createItem(
                     template.templateId,
                     { row, col },
-                    `enemy_${placed}_${Date.now()}`
+                    `enemy_d${this.day}_${placed}`
                 );
                 
                 if (item && this.enemyGrid.placeItem(item)) {
