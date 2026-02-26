@@ -173,14 +173,14 @@ export class MainScene extends Component {
     onDestroy(): void {
         // Cleanup backup input listeners to prevent memory leaks
         if (this._backupInputRegistered) {
-            if (this.enterGridBtn) {
-                this.enterGridBtn.off('touchend', this._onEnterGridTouched, this);
+            if (this._enterGridBtn) {
+                this._enterGridBtn.off('touchend', this._onEnterGridTouched, this);
             }
-            if (this.startBattleBtn) {
-                this.startBattleBtn.off('touchend', this._onStartBattleTouched, this);
+            if (this._startBattleBtn) {
+                this._startBattleBtn.off('touchend', this._onStartBattleTouched, this);
             }
-            if (this.continueNextDayBtn) {
-                this.continueNextDayBtn.off('touchend', this._onContinueNextDayTouched, this);
+            if (this._continueNextDayBtn) {
+                this._continueNextDayBtn.off('touchend', this._onContinueNextDayTouched, this);
             }
             this._backupInputRegistered = false;
         }
@@ -249,6 +249,9 @@ export class MainScene extends Component {
     
     // Backup input registration flags (one-time protection)
     private _backupInputRegistered: boolean = false;
+    private _enterGridBtn: Node | null = null;
+    private _startBattleBtn: Node | null = null;
+    private _continueNextDayBtn: Node | null = null;
 
     /**
      * Get current game phase
@@ -565,6 +568,7 @@ export class MainScene extends Component {
 
     /**
      * Setup backup input handlers for FlowControls buttons.
+     * Finds buttons at runtime via getChildByName (FlowControls > Button).
      * Provides diagnostic logging and TOUCH_END fallback if clickEvents fail.
      * Uses one-time registration protection to avoid duplicates.
      */
@@ -576,39 +580,50 @@ export class MainScene extends Component {
         
         console.log('[MainScene] Setting up backup input handlers...');
         
-        // Diagnostic: Check button availability
+        // Find buttons at runtime: FlowControls is child of MainScene root
+        const flowControls = this.node.getChildByName('FlowControls');
+        if (!flowControls) {
+            console.warn('[MainScene] FlowControls node not found, backup handlers skipped');
+            return;
+        }
+        
+        const enterGridBtn = flowControls.getChildByName('EnterGridBtn');
+        const startBattleBtn = flowControls.getChildByName('StartBattleBtn');
+        const continueNextDayBtn = flowControls.getChildByName('ContinueNextDayBtn');
+        
+        // Diagnostic: Log button availability
         const buttons = [
-            { name: 'EnterGridBtn', node: this.enterGridBtn },
-            { name: 'StartBattleBtn', node: this.startBattleBtn },
-            { name: 'ContinueNextDayBtn', node: this.continueNextDayBtn },
+            { name: 'EnterGridBtn', node: enterGridBtn },
+            { name: 'StartBattleBtn', node: startBattleBtn },
+            { name: 'ContinueNextDayBtn', node: continueNextDayBtn },
         ];
         
         for (const btn of buttons) {
             if (btn.node) {
-                // Check for Button component and clickEvents
                 const buttonComp = btn.node.getComponent('cc.Button') as any;
                 const hasClickEvents = buttonComp && buttonComp.clickEvents && buttonComp.clickEvents.length > 0;
                 console.log(`[MainScene] ${btn.name}: found, Button component: ${!!buttonComp}, clickEvents: ${hasClickEvents ? 'yes' : 'none'}`);
             } else {
-                console.log(`[MainScene] ${btn.name}: NOT FOUND in @property bindings`);
+                console.log(`[MainScene] ${btn.name}: NOT FOUND at runtime path`);
             }
         }
         
-        // Register backup TOUCH_END listeners
-        // Use 'touchend' string event type per Cocos 3.x best practices
-        
-        if (this.enterGridBtn) {
-            this.enterGridBtn.on('touchend', this._onEnterGridTouched, this);
+        // Register backup TOUCH_END listeners and store references for cleanup
+        if (enterGridBtn) {
+            this._enterGridBtn = enterGridBtn;
+            enterGridBtn.on('touchend', this._onEnterGridTouched, this);
             console.log('[MainScene] Registered backup touchend for EnterGridBtn');
         }
         
-        if (this.startBattleBtn) {
-            this.startBattleBtn.on('touchend', this._onStartBattleTouched, this);
+        if (startBattleBtn) {
+            this._startBattleBtn = startBattleBtn;
+            startBattleBtn.on('touchend', this._onStartBattleTouched, this);
             console.log('[MainScene] Registered backup touchend for StartBattleBtn');
         }
         
-        if (this.continueNextDayBtn) {
-            this.continueNextDayBtn.on('touchend', this._onContinueNextDayTouched, this);
+        if (continueNextDayBtn) {
+            this._continueNextDayBtn = continueNextDayBtn;
+            continueNextDayBtn.on('touchend', this._onContinueNextDayTouched, this);
             console.log('[MainScene] Registered backup touchend for ContinueNextDayBtn');
         }
         
@@ -616,43 +631,36 @@ export class MainScene extends Component {
         console.log('[MainScene] Backup input handlers setup complete');
     }
 
-    // Backup touch handlers with diagnostic logging
+    // Backup touch handlers - call actual business methods
     
     private _onEnterGridTouched(): void {
         const currentStage = this.getCurrentStage();
         console.log(`[MainScene] ENTER_GRID touched! Current stage: ${currentStage}`);
         
-        if (this.canTransitionTo(SceneStage.Grid)) {
-            const result = this.transitionToStage(SceneStage.Grid);
-            console.log(`[MainScene] Stage transition to Grid: ${result.ok ? 'SUCCESS' : 'FAILED'} (error: ${result.error})`);
-        } else {
-            console.log(`[MainScene] Cannot transition to Grid from ${currentStage}`);
-        }
+        // Call actual business method
+        const success = this.enterGrid();
+        console.log(`[MainScene] enterGrid() result: ${success ? 'SUCCESS' : 'FAILED'}`);
     }
     
     private _onStartBattleTouched(): void {
         const currentStage = this.getCurrentStage();
         console.log(`[MainScene] START_BATTLE touched! Current stage: ${currentStage}`);
         
-        if (this.canTransitionTo(SceneStage.Battle)) {
-            const result = this.transitionToStage(SceneStage.Battle);
-            console.log(`[MainScene] Stage transition to Battle: ${result.ok ? 'SUCCESS' : 'FAILED'} (error: ${result.error})`);
-        } else {
-            console.log(`[MainScene] Cannot transition to Battle from ${currentStage}`);
-        }
+        // Generate AI opponent before starting battle
+        this.gameLoop.generateAiOpponent();
+        
+        // Call actual business method (includes gameLoop.startBattle())
+        const success = this.startBattle();
+        console.log(`[MainScene] startBattle() result: ${success ? 'SUCCESS' : 'FAILED'}`);
     }
     
     private _onContinueNextDayTouched(): void {
         const currentStage = this.getCurrentStage();
         console.log(`[MainScene] CONTINUE_NEXT_DAY touched! Current stage: ${currentStage}`);
         
-        // Result stage should transition back to Shop
-        if (this.canTransitionTo(SceneStage.Shop)) {
-            const result = this.transitionToStage(SceneStage.Shop);
-            console.log(`[MainScene] Stage transition to Shop: ${result.ok ? 'SUCCESS' : 'FAILED'} (error: ${result.error})`);
-        } else {
-            console.log(`[MainScene] Cannot transition to Shop from ${currentStage}`);
-        }
+        // Call actual business method (includes completeDay, day/gold/hud refresh)
+        const success = this.continueToNextDay();
+        console.log(`[MainScene] continueToNextDay() result: ${success ? 'SUCCESS' : 'FAILED'}`);
     }
 
     /**
