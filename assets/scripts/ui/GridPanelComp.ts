@@ -306,4 +306,13 @@ export class GridPanelComp extends Component {
         this.cellNodes.forEach(node => node.destroy());
         this.cellNodes.clear();
     }
+
+    // ============= GridView Compatibility =============
+
+    /**
+     * Sync from GridView (for compatibility)
+     */
+    public syncFromGridView(gridView: any): void {
+        this.refreshGrid();
+    }
 }
