@@ -12,7 +12,6 @@
     "sourceMap": true,
     "resolveJsonModule": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "paths": {
       "cc": ["assets/scripts/cc.d.ts"]
