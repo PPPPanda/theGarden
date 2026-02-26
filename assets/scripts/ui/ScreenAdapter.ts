@@ -95,6 +95,7 @@ export class ScreenAdapter extends Component {
     private _leftPanelNode: Node | null = null;
     private _rightPanelNode: Node | null = null;
     private _centerContentNode: Node | null = null;
+    private _flowControlsNode: Node | null = null;
 
     // ============= Lifecycle =============
 
@@ -149,7 +150,7 @@ export class ScreenAdapter extends Component {
     // ============= Initialization =============
 
     /**
-     * Initialize adapter
+     * Initialize adapter with diagnostic logging
      */
     public initialize(): void {
         if (this._isInitialized) return;
@@ -157,6 +158,15 @@ export class ScreenAdapter extends Component {
         this.updateScreenSize();
         this.updateSafeArea();
         this.calculateScaleFactor();
+        
+        // Log initialization diagnostics
+        const orientation = this.getCurrentOrientation();
+        const safeArea = this._safeArea;
+        console.log(`[ScreenAdapter] Initialized:`);
+        console.log(`  Screen: ${this._screenSize.x}x${this._screenSize.y}`);
+        console.log(`  Orientation: ${orientation} (${this._screenSize.x > this._screenSize.y ? 'landscape' : 'portrait'})`);
+        console.log(`  SafeArea: top=${safeArea.top}, bottom=${safeArea.bottom}, left=${safeArea.left}, right=${safeArea.right}`);
+        console.log(`  ScaleFactor: ${this._scaleFactor.toFixed(3)}`);
         
         this._isInitialized = true;
     }
@@ -315,14 +325,24 @@ export class ScreenAdapter extends Component {
      * Update layout for current screen
      */
     public updateLayout(): void {
+        const prevOrientation = this.getCurrentOrientation();
+        
         this.updateScreenSize();
         this.updateSafeArea();
         this.calculateScaleFactor();
+        
+        const newOrientation = this.getCurrentOrientation();
+        const orientationChanged = prevOrientation !== newOrientation;
+        
+        if (orientationChanged || !this._isInitialized) {
+            console.log(`[ScreenAdapter] Layout update: ${this._screenSize.x}x${this._screenSize.y}, orientation: ${newOrientation} (changed: ${orientationChanged})`);
+        }
 
         // Update all registered UI elements
         this.updateHudPositions();
         this.updatePanels();
         this.updateContent();
+        this.updateFlowControlsPosition();
     }
 
     /**
@@ -410,6 +430,39 @@ export class ScreenAdapter extends Component {
         this._centerContentNode.setScale(scale, scale, 1);
     }
 
+    /**
+     * Update FlowControls position based on orientation.
+     * In landscape: position at bottom center.
+     * In portrait: position at bottom center with more spacing.
+     */
+    private updateFlowControlsPosition(): void {
+        if (!this._flowControlsNode) return;
+
+        const safeArea = this._safeArea;
+        const orientation = this.getCurrentOrientation();
+        const halfH = this._screenSize.y / 2;
+        const halfW = this._screenSize.x / 2;
+
+        const transform = this._flowControlsNode.getComponent(UITransform);
+        if (!transform) return;
+
+        let y: number;
+        let x: number = 0; // Center horizontally
+
+        // Position based on orientation
+        if (orientation === Orientation.Landscape) {
+            // Landscape: position near bottom with safe area
+            y = -halfH + safeArea.bottom + transform.height / 2 + 20;
+        } else {
+            // Portrait: position at bottom with extra spacing for virtual buttons
+            y = -halfH + safeArea.bottom + transform.height / 2 + 40;
+        }
+
+        this._flowControlsNode.setPosition(x, y, 0);
+        
+        console.log(`[ScreenAdapter] FlowControls positioned at (${x}, ${y}), orientation: ${orientation}`);
+    }
+
     // ============= UI Element Registration =============
 
     /**
@@ -450,6 +503,14 @@ export class ScreenAdapter extends Component {
     public registerCenterContent(node: Node): void {
         this._centerContentNode = node;
         this.updateContent();
+    }
+
+    /**
+     * Register FlowControls node for adaptive positioning
+     */
+    public registerFlowControls(node: Node): void {
+        this._flowControlsNode = node;
+        this.updateFlowControlsPosition();
     }
 
     // ============= Utility Methods =============

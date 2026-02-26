@@ -563,6 +563,13 @@ export class MainScene extends Component {
             if (this.centerContentNode) {
                 this.screenAdapter.registerCenterContent(this.centerContentNode);
             }
+            
+            // Register FlowControls for adaptive positioning
+            const flowControls = this.node.getChildByName('FlowControls');
+            if (flowControls) {
+                this.screenAdapter.registerFlowControls(flowControls);
+                console.log('[MainScene] FlowControls registered with ScreenAdapter');
+            }
         }
     }
 
