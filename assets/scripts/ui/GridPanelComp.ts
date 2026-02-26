@@ -413,8 +413,25 @@ export class GridPanelComp extends Component {
         
         const touchPos = touch.getLocation();
         
-        if (this.isDragGesture || this.isDraggingInGrid) {
-            // Handle grid internal move
+        // PRIORITY 1: Shop drag drop - check this FIRST to avoid isDragGesture conflict
+        if (this.isDraggingFromShop) {
+            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
+            if (localPos) {
+                const itemAtPos = this.gridManager?.getItemAt(localPos);
+                if (!itemAtPos) {
+                    this.endDrag(localPos);
+                } else {
+                    this.cancelDrag();
+                }
+            } else {
+                this.cancelDrag();
+            }
+            this.resetAllDragState();
+            return;
+        }
+        
+        // PRIORITY 2: Grid internal drag move
+        if (this.isDraggingInGrid || this.isDragGesture) {
             const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
             if (localPos && this.draggingItemId && this.dragStartCell) {
                 if (localPos.row !== this.dragStartCell.row || localPos.col !== this.dragStartCell.col) {
@@ -428,31 +445,34 @@ export class GridPanelComp extends Component {
                 }
             }
             this.endGridDrag();
-        } else if (this.isDraggingFromShop) {
-            // Handle shop item drop
-            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
-            if (localPos) {
-                const itemAtPos = this.gridManager?.getItemAt(localPos);
-                if (!itemAtPos) {
-                    this.endDrag(localPos);
-                } else {
-                    this.cancelDrag();
-                }
-            } else {
-                this.cancelDrag();
-            }
-        } else if (this.dragStartCell) {
-            // Was a tap - trigger cell touch
+            this.resetAllDragState();
+            return;
+        }
+        
+        // PRIORITY 3: Tap (not a drag)
+        if (this.dragStartCell) {
             const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
             if (localPos) {
                 this.onCellTouch(localPos.row, localPos.col);
             }
         }
         
-        // Reset state
+        // Reset all state
+        this.resetAllDragState();
+    }
+
+    /**
+     * Reset all drag-related state
+     */
+    private resetAllDragState(): void {
         this.touchStartPos = null;
         this.isDragGesture = false;
         this.dragStartCell = null;
+        this.isDraggingFromShop = false;
+        this.draggedShopItem = null;
+        this.isDraggingInGrid = false;
+        this.draggingItemId = null;
+        this.clearHoverEffect();
     }
 
     /**
@@ -706,11 +726,6 @@ export class GridPanelComp extends Component {
         label.horizontalAlign = Label.HorizontalAlign.CENTER;
         label.verticalAlign = Label.VerticalAlign.CENTER;
         label.string = '';
-
-        // Add touch listener for cell interaction and drag handling
-        cellNode.on(EventTouch.TOUCH_START, (event: EventTouch) => this.onCellTouchStart(event, row, col), this);
-        cellNode.on(EventTouch.TOUCH_MOVE, (event: EventTouch) => this.onCellTouchMove(event, row, col), this);
-        cellNode.on(EventTouch.TOUCH_END, (event: EventTouch) => this.onCellTouchEnd(event, row, col), this);
 
         return cellNode;
     }
