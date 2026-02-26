@@ -10,6 +10,9 @@ import { GridView } from './GridView';
 import { BattlePanel, BattlePanelState } from './BattlePanel';
 import { ScreenAdapter, Orientation } from './ScreenAdapter';
 import { HUD } from './HUD';
+import { GridPanelComp } from './GridPanelComp';
+import { ShopPanel } from './ShopPanel';
+import { SceneFlowStateMachine, SceneStage, SceneTransitionResult } from '../core/SceneFlowStateMachine';
 import { IGridItem, IItemTemplate, IShopSlot } from '../core/types';
 
 const { ccclass, property } = _decorator;
@@ -28,6 +31,9 @@ export class MainScene extends Component {
         // Initialize grid views
         this.playerGridView = new GridView(this.gameLoop.getPlayerGrid(), 50);
         this.enemyGridView = new GridView(this.gameLoop.getEnemyGrid(), 50);
+        
+        // Initialize stage machine (start at Loading)
+        this.stageMachine = new SceneFlowStateMachine(SceneStage.Loading);
     }
 
     /**
@@ -104,12 +110,19 @@ export class MainScene extends Component {
     @property({ type: Node, tooltip: 'Center content node (grids)' })
     public centerContentNode: Node | null = null;
 
+    @property({ type: GridPanelComp, tooltip: 'Player grid panel component' })
+    public gridPanel: GridPanelComp | null = null;
+
+    @property({ type: ShopPanel, tooltip: 'Shop panel component' })
+    public shopPanel: ShopPanel | null = null;
+
     // ============= Private Fields =============
 
     private gameLoop!: GameLoop;
     private playerGridView!: GridView;
     private enemyGridView!: GridView;
     private isInitialized: boolean = false;
+    private stageMachine!: SceneFlowStateMachine;
 
     /**
      * Get current game phase
@@ -117,6 +130,111 @@ export class MainScene extends Component {
     public getPhase(): GamePhase {
         return this.gameLoop.getPhase();
     }
+
+    // ============= Stage Management =============
+
+    /**
+     * Get current scene stage
+     */
+    public getCurrentStage(): SceneStage {
+        return this.stageMachine.getCurrentStage();
+    }
+
+    /**
+     * Transition to target stage
+     */
+    public transitionToStage(targetStage: SceneStage, context: Record<string, unknown> = {}): SceneTransitionResult {
+        const result = this.stageMachine.transitionTo(targetStage, context);
+        
+        if (result.ok) {
+            this.applyStageVisibility(targetStage);
+        }
+        
+        return result;
+    }
+
+    /**
+     * Advance to next stage in cycle
+     */
+    public advanceToNextStage(context: Record<string, unknown> = {}): SceneTransitionResult {
+        const result = this.stageMachine.advance(context);
+        
+        if (result.ok && result.transition) {
+            this.applyStageVisibility(result.transition.to);
+        }
+        
+        return result;
+    }
+
+    /**
+     * Check if transition to target stage is valid
+     */
+    public canTransitionTo(targetStage: SceneStage): boolean {
+        return this.stageMachine.canTransition(targetStage);
+    }
+
+    /**
+     * Apply visibility for all panels based on stage
+     */
+    private applyStageVisibility(stage: SceneStage): void {
+        // Hide all panels first
+        this.setPanelVisible(this.shopPanel?.node ?? null, false);
+        this.setPanelVisible(this.gridPanel?.node ?? null, false);
+        this.setPanelVisible(this.battlePanel?.node ?? null, false);
+        
+        // Show panels based on stage
+        switch (stage) {
+            case SceneStage.Loading:
+                // Loading - hide all game UI
+                break;
+                
+            case SceneStage.Shop:
+                // Show shop and grid
+                this.setPanelVisible(this.shopPanel?.node ?? null, true);
+                this.setPanelVisible(this.gridPanel?.node ?? null, true);
+                // Refresh shop
+                this.shopPanel?.refreshShopUI();
+                break;
+                
+            case SceneStage.Grid:
+                // Show grid only (player arranges items)
+                this.setPanelVisible(this.gridPanel?.node ?? null, true);
+                this.gridPanel?.refreshGrid();
+                break;
+                
+            case SceneStage.Battle:
+                // Show battle panel
+                this.setPanelVisible(this.battlePanel?.node ?? null, true);
+                break;
+                
+            case SceneStage.Result:
+                // Show result (battle panel shows this)
+                this.setPanelVisible(this.battlePanel?.node ?? null, true);
+                break;
+        }
+        
+        // Always show HUD
+        this.setPanelVisible(this.hud?.node ?? null, true);
+        this.updateAllDisplays();
+    }
+
+    /**
+     * Set panel visibility helper
+     */
+    private setPanelVisible(node: Node | null, visible: boolean): void {
+        if (node) {
+            node.active = visible;
+        }
+    }
+
+    /**
+     * Check if waiting for user input at current stage
+     */
+    public isWaitingForUser(): boolean {
+        return this.stageMachine.isWaitingForUser();
+    }
+
+    // ============= Player Grid View =============
 
     /**
      * Get player grid view
