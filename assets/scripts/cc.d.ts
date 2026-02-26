@@ -61,12 +61,16 @@ export const TouchEvent: { TOUCH_END: any; TOUCH_START: any; TOUCH_MOVE: any };
 
 // ============= ScreenAdapter dependencies =============
 
-// view - screen/view management
+// view - screen/view management (Cocos 3.8.8 safe subset)
+// NOTE: Only declare APIs that are stable and non-deprecated.
+// ScreenAdapter uses (view as any) for optional APIs like
+// getVisibleSize, getDesignResolutionSize, getSafeAreaRect.
 export interface ViewInterface {
     on(event: string, callback: Function, target?: any): void;
     off(event: string, callback: Function, target?: any): void;
-    getCanvasSize(): Vec2Interface;
-    getSafeAreaRect(): Vec4Interface;
+    // getVisibleSize and getDesignResolutionSize exist at runtime
+    // but are called via (view as any) with typeof guards, so we
+    // intentionally omit them here to force defensive access.
 }
 export const view: ViewInterface;
 
