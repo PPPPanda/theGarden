@@ -47,6 +47,9 @@ export class MainScene extends Component {
         this.playerGridView.init();
         this.enemyGridView.init();
         
+        // Initialize all panels with gameLoop
+        this.initAllPanels();
+        
         // Initialize battle panel
         this.initBattlePanel();
         
@@ -58,7 +61,69 @@ export class MainScene extends Component {
             this.hud.init(this.gameLoop);
         }
         
+        // Auto-advance from Loading to Shop on startup
+        this.transitionToStage(SceneStage.Shop);
+        
         this.isInitialized = true;
+    }
+
+    /**
+     * Initialize all panels with proper dependencies and callbacks
+     */
+    private initAllPanels(): void {
+        const itemDB = this.gameLoop.getItemDB();
+        
+        // Initialize ShopPanel
+        if (this.shopPanel) {
+            this.shopPanel.init(this.gameLoop);
+            
+            // Bind shop callbacks
+            this.shopPanel.setOnBuy((slotIndex: number) => {
+                // Buy is handled via drag to grid - this is for direct buy if needed
+                return false;
+            });
+            
+            this.shopPanel.setOnRefresh(() => {
+                const success = this.gameLoop.refreshShop();
+                if (success) {
+                    this.shopPanel?.refreshShopUI();
+                    this.updateGoldDisplay();
+                }
+                return success;
+            });
+            
+            this.shopPanel.setOnLock((slotIndex: number) => {
+                const success = this.gameLoop.getShopManager().toggleLock(slotIndex);
+                if (success) {
+                    this.shopPanel?.refreshShopUI();
+                }
+                return success;
+            });
+        }
+        
+        // Initialize GridPanel
+        if (this.gridPanel) {
+            this.gridPanel.init(
+                this.gameLoop.getPlayerGrid(),
+                itemDB,
+                this.gameLoop
+            );
+            
+            // Bind grid to receive shop drops
+            this.gridPanel.setOnShopItemDrop((templateId: string, slotIndex: number, position) => {
+                const success = this.gameLoop.purchaseFromShop(slotIndex, position);
+                if (success) {
+                    this.gridPanel?.refreshGrid();
+                    this.updateGoldDisplay();
+                }
+                return success;
+            });
+        }
+        
+        // Initialize BattlePanel
+        if (this.battlePanel) {
+            this.battlePanel.init(this.gameLoop);
+        }
     }
 
     /**
@@ -571,7 +636,9 @@ export class MainScene extends Component {
      * Update gold display
      */
     private updateGoldDisplay(): void {
-        // In real implementation, would update Cocos UI
+        if (this.hud) {
+            this.hud.forceRefresh();
+        }
     }
 
     /**
