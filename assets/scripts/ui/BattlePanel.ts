@@ -3,7 +3,7 @@
  * Displays battle phase, events, and results
  */
 
-import { _decorator, Component, Node, Label, Color, Graphics, UITransform, EventTouch } from 'cc';
+import { _decorator, Component, Node, Label, Color, Graphics, UITransform, Sprite, Vec3 } from 'cc';
 import { BattleEngine } from '../core/BattleEngine';
 import { GameLoop, GamePhase, BattleResult } from '../core/GameLoop';
 import { IBattleState, ITimelineEvent } from '../core/types';
@@ -63,6 +63,18 @@ export class BattlePanel extends Component {
 
     @property({ type: Node, tooltip: 'Continue button' })
     public continueButton: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Timeline progress bar fill' })
+    public timelineBar: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Floating text container layer' })
+    public floatingTextLayer: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Status icons container for player' })
+    public playerStatusIcons: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Status icons container for enemy' })
+    public enemyStatusIcons: Node | null = null;
 
     // ============= Private Fields =============
 
@@ -345,6 +357,146 @@ export class BattlePanel extends Component {
         const label = this.timerLabel.getComponent(Label);
         if (label) {
             label.string = `⏱️ ${currentTime.toFixed(1)}s / ${maxTime}s`;
+        }
+
+        // Update timeline progress bar
+        this.updateTimelineBar(currentTime, maxTime);
+    }
+
+    /**
+     * Update timeline progress bar
+     */
+    private updateTimelineBar(currentTime: number, maxTime: number): void {
+        if (!this.timelineBar) return;
+
+        const graphics = this.timelineBar.getComponent(Graphics);
+        if (!graphics) return;
+
+        const transform = this.timelineBar.getComponent(UITransform);
+        const maxWidth = transform?.width ?? 400;
+        const progress = Math.min(1, Math.max(0, currentTime / maxTime));
+        const fillWidth = maxWidth * progress;
+
+        graphics.clear();
+        // Green for remaining, red for overtime
+        graphics.fillColor = progress < 1 ? this.PLAYER_COLOR : this.ENEMY_COLOR;
+        graphics.roundRect(-maxWidth / 2, -8, fillWidth, 16, 4);
+        graphics.fill();
+    }
+
+    // ============= Floating Text =============
+
+    /**
+     * Show floating damage/heal text at position
+     */
+    public showFloatingText(text: string, position: Vec3, isDamage: boolean = true): void {
+        if (!this.floatingTextLayer) return;
+
+        // Create floating text node
+        const floatNode = new Node('floatingText');
+        floatNode.setPosition(position);
+
+        // Add transform
+        const transform = floatNode.addComponent(UITransform);
+        transform.setContentSize(120, 40);
+
+        // Add label
+        const label = floatNode.addComponent(Label);
+        label.fontSize = 24;
+        label.fontWeight = 'bold';
+        label.horizontalAlign = Label.HorizontalAlign.CENTER;
+        label.verticalAlign = Label.VerticalAlign.CENTER;
+        label.string = text;
+
+        // Color based on type
+        if (isDamage) {
+            label.color = this.ENEMY_COLOR;
+        } else {
+            label.color = this.PLAYER_COLOR;
+        }
+
+        this.floatingTextLayer.addChild(floatNode);
+
+        // Animate using schedule - float up and fade out
+        let elapsed = 0;
+        const duration = 0.7;
+        const startY = position.y;
+        const startColor = label.color.clone();
+
+        const updateFloat = (dt: number) => {
+            elapsed += dt;
+            const t = elapsed / duration;
+            
+            if (t >= 1) {
+                floatNode.destroy();
+                this.node.off('update', updateFloat);
+                return;
+            }
+
+            // Float up
+            const newY = startY + t * 80;
+            floatNode.setPosition(position.x, newY, position.z);
+
+            // Fade out in last half
+            if (t > 0.5) {
+                const alpha = Math.floor(255 * (1 - (t - 0.5) * 2));
+                label.color = new Color(startColor.r, startColor.g, startColor.b, alpha);
+            }
+        };
+
+        this.node.on('update', updateFloat);
+    }
+
+    /**
+     * Show damage number
+     */
+    public showDamage(target: 'player' | 'enemy', damage: number, worldPos: Vec3): void {
+        const sign = target === 'enemy' ? '-' : '+';
+        this.showFloatingText(`${sign}${Math.round(damage)}`, worldPos, true);
+    }
+
+    /**
+     * Show heal number
+     */
+    public showHeal(amount: number, worldPos: Vec3): void {
+        this.showFloatingText(`+${Math.round(amount)}`, worldPos, false);
+    }
+
+    // ============= Status Icons =============
+
+    /**
+     * Update status icons display
+     */
+    public updateStatusIcons(playerStatuses: string[], enemyStatuses: string[]): void {
+        this.updateStatusIconContainer(this.playerStatusIcons, playerStatuses);
+        this.updateStatusIconContainer(this.enemyStatusIcons, enemyStatuses);
+    }
+
+    /**
+     * Update a single status icon container
+     */
+    private updateStatusIconContainer(container: Node | null, statuses: string[]): void {
+        if (!container) return;
+
+        // Clear existing icons
+        const children = container.children.slice();
+        for (const child of children) {
+            child.destroy();
+        }
+
+        // Add icons for each status
+        const icons = ['🔥', '🛡️', '⚡', '💀', '✨', '❄️'];
+        for (let i = 0; i < statuses.length && i < icons.length; i++) {
+            const iconNode = new Node(`status_${i}`);
+            const transform = iconNode.addComponent(UITransform);
+            transform.setContentSize(32, 32);
+            iconNode.setPosition(i * 36 - (statuses.length - 1) * 18, 0, 0);
+
+            const label = iconNode.addComponent(Label);
+            label.fontSize = 24;
+            label.string = icons[i];
+
+            container.addChild(iconNode);
         }
     }
 
