@@ -51,6 +51,8 @@ export interface EventTouchConstructor {
 export const EventTouch: EventTouchConstructor;
 
 export const SpriteAtlas: new (...args: any[]) => any;
+export const Button: new (...args: any[]) => any;
+export type Button = any;
 
 // Enum values
 export const HorizontalAlign: any;

@@ -1,18 +1,28 @@
 /**
  * ShopPanel - Shop Panel Cocos Component
- * Displays shop items, handles purchase and refresh interactions
+ * Displays shop slots with item icons, prices, buy/lock buttons.
+ * All purchase/refresh/lock logic delegated via callbacks to MainScene.
  */
 
-import { _decorator, Component, Node, Graphics, Label, Color, UITransform, EventTouch } from 'cc';
+import { _decorator, Component, Node, Label, Color, UITransform, EventTouch, Sprite, Button } from 'cc';
 import { ShopManager } from '../core/ShopManager';
 import { GameLoop } from '../core/GameLoop';
+import { ItemDB } from '../core/ItemDB';
 import { IShopSlot, IItemTemplate } from '../core/types';
 
 const { ccclass, property } = _decorator;
 
+/** Per-slot bound nodes */
+interface SlotBinding {
+    icon: Node | null;
+    price: Node | null;
+    buyBtn: Node | null;
+    lockBtn: Node | null;
+}
+
 @ccclass('ShopPanel')
 export class ShopPanel extends Component {
-    // ============= Properties =============
+    // ============= Layout Properties =============
 
     @property({ type: Number, tooltip: 'Shop slot size in pixels' })
     public slotSize: number = 80;
@@ -20,349 +30,604 @@ export class ShopPanel extends Component {
     @property({ type: Number, tooltip: 'Gap between slots' })
     public slotGap: number = 10;
 
-    @property({ type: Color, tooltip: 'Slot background color' })
+    @property({ type: Number, tooltip: 'Number of shop slots (3-5)' })
+    public slotCount: number = 4;
+
+    // ============= Slot 0 Bindings =============
+
+    @property({ type: Node, tooltip: 'Slot 0 icon node (Label/Sprite)' })
+    public slot0Icon: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 0 price label node' })
+    public slot0Price: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 0 buy button node' })
+    public slot0BuyBtn: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 0 lock button node' })
+    public slot0LockBtn: Node | null = null;
+
+    // ============= Slot 1 Bindings =============
+
+    @property({ type: Node, tooltip: 'Slot 1 icon node' })
+    public slot1Icon: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 1 price label node' })
+    public slot1Price: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 1 buy button node' })
+    public slot1BuyBtn: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 1 lock button node' })
+    public slot1LockBtn: Node | null = null;
+
+    // ============= Slot 2 Bindings =============
+
+    @property({ type: Node, tooltip: 'Slot 2 icon node' })
+    public slot2Icon: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 2 price label node' })
+    public slot2Price: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 2 buy button node' })
+    public slot2BuyBtn: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 2 lock button node' })
+    public slot2LockBtn: Node | null = null;
+
+    // ============= Slot 3 Bindings =============
+
+    @property({ type: Node, tooltip: 'Slot 3 icon node' })
+    public slot3Icon: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 3 price label node' })
+    public slot3Price: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 3 buy button node' })
+    public slot3BuyBtn: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 3 lock button node' })
+    public slot3LockBtn: Node | null = null;
+
+    // ============= Global Bindings =============
+
+    @property({ type: Node, tooltip: 'Refresh button node' })
+    public refreshBtn: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Gold display label node' })
+    public goldLabelNode: Node | null = null;
+
+    // ============= Style Properties =============
+
+    @property({ type: Color, tooltip: 'Empty slot background color' })
     public slotColor: Color = new Color(60, 60, 60, 200);
 
     @property({ type: Color, tooltip: 'Purchased slot color' })
     public purchasedColor: Color = new Color(100, 100, 100, 150);
 
-    @property({ type: Color, tooltip: 'Locked slot color' })
+    @property({ type: Color, tooltip: 'Locked slot indicator color' })
     public lockedColor: Color = new Color(255, 215, 0, 100);
 
     @property({ type: Color, tooltip: 'Text color' })
     public textColor: Color = new Color(255, 255, 255, 255);
 
-    @property({ type: Color, tooltip: 'Gold color' })
+    @property({ type: Color, tooltip: 'Gold text color' })
     public goldColor: Color = new Color(255, 215, 0, 255);
 
-    // ============= Lifecycle =============
-
-    onLoad(): void {
-        this.createShopUI();
-    }
-
-    start(): void {
-        this.refreshDisplay();
-    }
-
-    // ============= Dependencies =============
+    // ============= Private State =============
 
     private shopManager: ShopManager | null = null;
     private gameLoop: GameLoop | null = null;
-    private slotNodes: Map<number, Node> = new Map();
-    private goldLabel: Label | null = null;
-    private refreshCostLabel: Label | null = null;
+    private itemDB: ItemDB | null = null;
+
+    /** Runtime-created slot nodes (fallback when @property nodes not bound) */
+    private runtimeSlotNodes: Map<number, Node> = new Map();
+
+    /** Resolved slot bindings (bound or runtime-created) */
+    private slotBindings: SlotBinding[] = [];
+
+    /** Runtime gold label ref */
+    private runtimeGoldLabel: Label | null = null;
+
+    /** Runtime refresh cost label ref */
+    private runtimeRefreshLabel: Label | null = null;
+
+    // ============= Callbacks =============
+
+    private onBuyCallback: ((slotIndex: number) => boolean) | null = null;
+    private onRefreshCallback: (() => boolean) | null = null;
+    private onLockCallback: ((slotIndex: number) => boolean) | null = null;
 
     /**
-     * Initialize with dependencies
+     * Set buy callback — called when buy button pressed.
+     * Return true = purchase succeeded, UI will refresh.
      */
-    public init(shopManager: ShopManager, gameLoop: GameLoop): void {
+    public setOnBuy(callback: (slotIndex: number) => boolean): void {
+        this.onBuyCallback = callback;
+    }
+
+    /**
+     * Set refresh callback — called when refresh button pressed.
+     * Return true = refresh succeeded, UI will refresh.
+     */
+    public setOnRefresh(callback: () => boolean): void {
+        this.onRefreshCallback = callback;
+    }
+
+    /**
+     * Set lock callback — called when lock button pressed.
+     * Return true = lock toggled, UI will refresh.
+     */
+    public setOnLock(callback: (slotIndex: number) => boolean): void {
+        this.onLockCallback = callback;
+    }
+
+    // ============= Initialization =============
+
+    /**
+     * Initialize with GameLoop (primary entry point)
+     */
+    public init(gameLoop: GameLoop): void {
+        this.gameLoop = gameLoop;
+        this.shopManager = gameLoop.getShopManager();
+        this.itemDB = gameLoop.getItemDB();
+        this.resolveBindings();
+        this.wireEvents();
+        this.refreshShopUI();
+    }
+
+    /**
+     * Initialize with explicit dependencies
+     */
+    public initWithDeps(shopManager: ShopManager, gameLoop: GameLoop, itemDB: ItemDB): void {
         this.shopManager = shopManager;
         this.gameLoop = gameLoop;
-        this.refreshDisplay();
+        this.itemDB = itemDB;
+        this.resolveBindings();
+        this.wireEvents();
+        this.refreshShopUI();
     }
 
-    // ============= UI Creation =============
+    // ============= Lifecycle =============
 
-    /**
-     * Create shop UI elements
-     */
-    private createShopUI(): void {
-        // Create shop container
-        this.createGoldDisplay();
-        this.createRefreshButton();
-        this.createSlots();
+    public onLoad(): void {
+        // Build fallback UI for any unbound slots
+        this.buildFallbackUI();
     }
 
-    /**
-     * Create gold display
-     */
-    private createGoldDisplay(): void {
-        const goldNode = new Node('goldDisplay');
-        const transform = goldNode.addComponent(UITransform);
-        transform.setContentSize(150, 30);
-        goldNode.setPosition(0, -30, 0);
-        this.node.addChild(goldNode);
-
-        this.goldLabel = goldNode.addComponent(Label);
-        this.goldLabel.fontSize = 24;
-        this.goldLabel.color = this.goldColor;
-        this.goldLabel.string = 'Gold: 0';
+    public start(): void {
+        this.resolveBindings();
+        this.wireEvents();
+        this.refreshShopUI();
     }
 
-    /**
-     * Create refresh button
-     */
-    private createRefreshButton(): void {
-        const refreshNode = new Node('refreshButton');
-        const transform = refreshNode.addComponent(UITransform);
-        transform.setContentSize(100, 40);
-        refreshNode.setPosition(0, -80, 0);
-        this.node.addChild(refreshNode);
-
-        // Background
-        const graphics = refreshNode.addComponent(Graphics);
-        graphics.fillColor = new Color(100, 150, 255, 200);
-        graphics.rect(-50, -20, 100, 40);
-        graphics.fill();
-
-        // Label
-        const labelNode = new Node('label');
-        const labelTransform = labelNode.addComponent(UITransform);
-        labelTransform.setContentSize(90, 30);
-        labelNode.setPosition(0, 0, 0);
-        refreshNode.addChild(labelNode);
-
-        const label = labelNode.addComponent(Label);
-        label.fontSize = 20;
-        label.color = this.textColor;
-        label.string = 'Refresh: 2g';
-
-        this.refreshCostLabel = label;
-
-        // Touch event
-        refreshNode.on(EventTouch.TOUCH_END, () => this.onRefreshClicked(), this);
-    }
+    // ============= Binding Resolution =============
 
     /**
-     * Create shop slots
+     * Resolve slot bindings: prefer @property nodes, fall back to runtime-created
      */
-    private createSlots(): void {
-        const totalWidth = 5 * this.slotSize + 4 * this.slotGap;
-        const startX = -totalWidth / 2 + this.slotSize / 2;
+    private resolveBindings(): void {
+        this.slotBindings = [];
 
-        for (let i = 0; i < 5; i++) {
-            const slotNode = new Node(`slot_${i}`);
-            const transform = slotNode.addComponent(UITransform);
-            transform.setContentSize(this.slotSize, this.slotSize);
-            slotNode.setPosition(startX + i * (this.slotSize + this.slotGap), 30, 0);
-            this.node.addChild(slotNode);
+        const boundSlots: Array<[Node | null, Node | null, Node | null, Node | null]> = [
+            [this.slot0Icon, this.slot0Price, this.slot0BuyBtn, this.slot0LockBtn],
+            [this.slot1Icon, this.slot1Price, this.slot1BuyBtn, this.slot1LockBtn],
+            [this.slot2Icon, this.slot2Price, this.slot2BuyBtn, this.slot2LockBtn],
+            [this.slot3Icon, this.slot3Price, this.slot3BuyBtn, this.slot3LockBtn],
+        ];
 
-            // Store reference
-            this.slotNodes.set(i, slotNode);
+        for (let i = 0; i < this.slotCount; i++) {
+            const bound = i < boundSlots.length ? boundSlots[i] : [null, null, null, null];
+            const runtimeNode = this.runtimeSlotNodes.get(i);
 
-            // Touch event for purchase
-            slotNode.on(EventTouch.TOUCH_END, () => this.onSlotClicked(i), this);
-
-            // Create slot content
-            this.createSlotContent(slotNode, i);
+            this.slotBindings.push({
+                icon: bound[0] ?? runtimeNode?.getChildByName('icon') ?? null,
+                price: bound[1] ?? runtimeNode?.getChildByName('price') ?? null,
+                buyBtn: bound[2] ?? runtimeNode?.getChildByName('buyBtn') ?? null,
+                lockBtn: bound[3] ?? runtimeNode?.getChildByName('lockBtn') ?? null,
+            });
         }
     }
 
     /**
-     * Create slot content (background + emoji + price)
+     * Wire button events
      */
-    private createSlotContent(slotNode: Node, index: number): void {
-        // Background
-        const bg = slotNode.addComponent(Graphics);
-        bg.fillColor = this.slotColor;
-        bg.rect(-this.slotSize / 2, -this.slotSize / 2, this.slotSize, this.slotSize);
-        bg.fill();
+    private wireEvents(): void {
+        // Slot buy/lock buttons
+        for (let i = 0; i < this.slotBindings.length; i++) {
+            const binding = this.slotBindings[i];
+            const slotIdx = i;
 
-        // Emoji label
-        const emojiNode = new Node('emoji');
-        const emojiTransform = emojiNode.addComponent(UITransform);
-        emojiTransform.setContentSize(this.slotSize * 0.7, this.slotSize * 0.7);
-        emojiNode.setPosition(0, 5, 0);
-        slotNode.addChild(emojiNode);
+            if (binding.buyBtn) {
+                binding.buyBtn.off(EventTouch.TOUCH_END);
+                binding.buyBtn.on(EventTouch.TOUCH_END, () => this.handleBuy(slotIdx), this);
+            }
+            if (binding.lockBtn) {
+                binding.lockBtn.off(EventTouch.TOUCH_END);
+                binding.lockBtn.on(EventTouch.TOUCH_END, () => this.handleLock(slotIdx), this);
+            }
+        }
 
-        const emojiLabel = emojiNode.addComponent(Label);
-        emojiLabel.fontSize = Math.floor(this.slotSize * 0.5);
-        emojiLabel.color = this.textColor;
-        emojiLabel.string = '?';
-        (emojiLabel as any)._slotIndex = index;
-        (emojiLabel as any)._slotEmoji = emojiLabel;
+        // Refresh button
+        const refreshNode = this.refreshBtn ?? this.node.getChildByName('refreshBtn');
+        if (refreshNode) {
+            refreshNode.off(EventTouch.TOUCH_END);
+            refreshNode.on(EventTouch.TOUCH_END, () => this.handleRefresh(), this);
+        }
+    }
+
+    // ============= Fallback UI Creation =============
+
+    /**
+     * Build runtime UI for slots not bound via @property
+     */
+    private buildFallbackUI(): void {
+        const totalWidth = this.slotCount * this.slotSize + (this.slotCount - 1) * this.slotGap;
+        const startX = -totalWidth / 2 + this.slotSize / 2;
+
+        for (let i = 0; i < this.slotCount; i++) {
+            // Skip if already bound
+            const boundSlots = [this.slot0Icon, this.slot1Icon, this.slot2Icon, this.slot3Icon];
+            if (i < boundSlots.length && boundSlots[i]) continue;
+
+            const slotNode = this.createFallbackSlot(i);
+            slotNode.setPosition(startX + i * (this.slotSize + this.slotGap), 0, 0);
+            this.node.addChild(slotNode);
+            this.runtimeSlotNodes.set(i, slotNode);
+        }
+
+        // Gold label fallback
+        if (!this.goldLabelNode) {
+            const goldNode = new Node('goldLabel');
+            const transform = goldNode.addComponent(UITransform);
+            transform.setContentSize(150, 30);
+            goldNode.setPosition(0, -(this.slotSize / 2 + 30), 0);
+            this.node.addChild(goldNode);
+
+            this.runtimeGoldLabel = goldNode.addComponent(Label);
+            this.runtimeGoldLabel.fontSize = 20;
+            this.runtimeGoldLabel.color = this.goldColor;
+            this.runtimeGoldLabel.string = 'Gold: 0';
+        }
+
+        // Refresh button fallback
+        if (!this.refreshBtn) {
+            const refreshNode = new Node('refreshBtn');
+            const transform = refreshNode.addComponent(UITransform);
+            transform.setContentSize(120, 36);
+            refreshNode.setPosition(0, -(this.slotSize / 2 + 65), 0);
+            this.node.addChild(refreshNode);
+
+            // Add Sprite background
+            refreshNode.addComponent(Sprite);
+
+            const labelNode = new Node('label');
+            const labelTransform = labelNode.addComponent(UITransform);
+            labelTransform.setContentSize(110, 30);
+            labelNode.setPosition(0, 0, 0);
+            refreshNode.addChild(labelNode);
+
+            this.runtimeRefreshLabel = labelNode.addComponent(Label);
+            this.runtimeRefreshLabel.fontSize = 18;
+            this.runtimeRefreshLabel.color = this.textColor;
+            this.runtimeRefreshLabel.string = 'Refresh: 2g';
+        }
+    }
+
+    /**
+     * Create a single fallback slot node
+     */
+    private createFallbackSlot(index: number): Node {
+        const slotNode = new Node(`slot_${index}`);
+        const transform = slotNode.addComponent(UITransform);
+        transform.setContentSize(this.slotSize, this.slotSize + 40);
+
+        // Slot background (Sprite)
+        const bgNode = new Node('bg');
+        const bgTransform = bgNode.addComponent(UITransform);
+        bgTransform.setContentSize(this.slotSize, this.slotSize);
+        bgNode.setPosition(0, 20, 0);
+        bgNode.addComponent(Sprite);
+        slotNode.addChild(bgNode);
+
+        // Icon label (emoji placeholder)
+        const iconNode = new Node('icon');
+        const iconTransform = iconNode.addComponent(UITransform);
+        iconTransform.setContentSize(this.slotSize * 0.7, this.slotSize * 0.7);
+        iconNode.setPosition(0, 25, 0);
+        slotNode.addChild(iconNode);
+
+        const iconLabel = iconNode.addComponent(Label);
+        iconLabel.fontSize = Math.floor(this.slotSize * 0.45);
+        iconLabel.horizontalAlign = Label.HorizontalAlign.CENTER;
+        iconLabel.verticalAlign = Label.VerticalAlign.CENTER;
+        iconLabel.string = '?';
 
         // Price label
         const priceNode = new Node('price');
         const priceTransform = priceNode.addComponent(UITransform);
-        priceTransform.setContentSize(this.slotSize * 0.8, 20);
-        priceNode.setPosition(0, -this.slotSize / 2 + 12, 0);
+        priceTransform.setContentSize(this.slotSize, 20);
+        priceNode.setPosition(0, -this.slotSize / 2 + 15, 0);
         slotNode.addChild(priceNode);
 
         const priceLabel = priceNode.addComponent(Label);
         priceLabel.fontSize = 16;
         priceLabel.color = this.goldColor;
         priceLabel.string = '0g';
-        (priceLabel as any)._slotIndex = index;
-        (priceLabel as any)._slotPrice = priceLabel;
+
+        // Buy button (entire slot acts as buy area)
+        const buyBtnNode = new Node('buyBtn');
+        const buyTransform = buyBtnNode.addComponent(UITransform);
+        buyTransform.setContentSize(this.slotSize, this.slotSize);
+        buyBtnNode.setPosition(0, 20, 0);
+        slotNode.addChild(buyBtnNode);
+
+        // Lock button (small toggle in corner)
+        const lockBtnNode = new Node('lockBtn');
+        const lockTransform = lockBtnNode.addComponent(UITransform);
+        lockTransform.setContentSize(24, 24);
+        lockBtnNode.setPosition(this.slotSize / 2 - 14, this.slotSize / 2 + 6, 0);
+        slotNode.addChild(lockBtnNode);
+
+        const lockLabel = lockBtnNode.addComponent(Label);
+        lockLabel.fontSize = 14;
+        lockLabel.string = '🔓';
+
+        return slotNode;
     }
 
-    // ============= Interactions =============
+    // ============= Event Handlers (delegate to callbacks) =============
 
     /**
-     * Handle slot click for purchase
+     * Handle buy button press
      */
-    private onSlotClicked(index: number): void {
-        if (!this.shopManager || !this.gameLoop) {
-            console.warn('ShopPanel: not initialized');
+    private handleBuy(slotIndex: number): void {
+        if (this.onBuyCallback) {
+            const success = this.onBuyCallback(slotIndex);
+            if (success) {
+                this.refreshShopUI();
+            }
             return;
         }
 
-        const slot = this.shopManager.getSlot(index);
-        if (!slot || slot.purchased) {
-            console.log(`ShopPanel: slot ${index} is not available`);
+        // No callback set — purchase requires position from MainScene
+        console.warn('ShopPanel: no onBuy callback set, purchase requires MainScene wiring');
+    }
+
+    /**
+     * Handle refresh button press
+     */
+    private handleRefresh(): void {
+        if (this.onRefreshCallback) {
+            const success = this.onRefreshCallback();
+            if (success) {
+                this.refreshShopUI();
+            }
             return;
         }
 
-        // Try to purchase via MainScene/GameLoop
-        // Note: This requires a MainScene reference - for now use gameLoop directly
-        const playerGold = this.gameLoop.getPlayerGold();
-        const slotInfo = this.shopManager.canPurchase(index);
-
-        if (!slotInfo) {
-            console.log('ShopPanel: cannot purchase - invalid slot');
-            return;
-        }
-
-        if (playerGold < slotInfo.cost) {
-            console.log(`ShopPanel: not enough gold (have ${playerGold}, need ${slotInfo.cost})`);
-            this.showFeedback('Not enough gold!', false);
-            return;
-        }
-
-        // Attempt purchase - for now just mark as purchased and deduct gold
-        // In full implementation, would call MainScene.purchaseFromShop()
-        const success = this.shopManager.markPurchased(index);
+        // Fallback: direct refresh via gameLoop
+        if (!this.gameLoop) return;
+        const success = this.gameLoop.refreshShop();
         if (success) {
-            // Deduct gold
-            (this.gameLoop as any).deductGold(slotInfo.cost);
-            console.log(`ShopPanel: purchased ${slotInfo.template.name} for ${slotInfo.cost}g`);
-            this.showFeedback(`Purchased: ${slotInfo.template.name}`, true);
-            this.refreshDisplay();
+            this.refreshShopUI();
         }
     }
 
     /**
-     * Handle refresh button click
+     * Handle lock button press
      */
-    private onRefreshClicked(): void {
-        if (!this.shopManager || !this.gameLoop) {
-            console.warn('ShopPanel: not initialized');
+    private handleLock(slotIndex: number): void {
+        if (this.onLockCallback) {
+            const success = this.onLockCallback(slotIndex);
+            if (success) {
+                this.refreshShopUI();
+            }
             return;
         }
 
-        const refreshCost = this.shopManager.getRefreshCost();
-        const playerGold = this.gameLoop.getPlayerGold();
-
-        if (playerGold < refreshCost) {
-            console.log(`ShopPanel: not enough gold for refresh (have ${playerGold}, need ${refreshCost})`);
-            this.showFeedback('Not enough gold for refresh!', false);
-            return;
-        }
-
-        // Deduct gold and refresh
-        (this.gameLoop as any).deductGold(refreshCost);
-        this.shopManager.refreshResult();
-
-        console.log(`ShopPanel: refreshed shop for ${refreshCost}g`);
-        this.showFeedback('Shop refreshed!', true);
-        this.refreshDisplay();
+        // Fallback: direct lock toggle via shopManager
+        if (!this.shopManager) return;
+        this.shopManager.toggleLock(slotIndex);
+        this.refreshShopUI();
     }
 
-    /**
-     * Show feedback message
-     */
-    private showFeedback(message: string, success: boolean): void {
-        // Simple console feedback - could be enhanced with UI
-        console.log(`[ShopPanel] ${success ? '✓' : '✗'} ${message}`);
-    }
-
-    // ============= Display Updates =============
+    // ============= Display Refresh =============
 
     /**
-     * Refresh entire display
+     * Refresh entire shop UI
      */
-    public refreshDisplay(): void {
+    public refreshShopUI(): void {
         this.updateGoldDisplay();
-        this.updateRefreshCostDisplay();
-        this.updateSlots();
+        this.updateRefreshDisplay();
+        this.updateAllSlots();
     }
 
     /**
      * Update gold display
      */
     private updateGoldDisplay(): void {
-        if (!this.gameLoop) return;
+        const gold = this.gameLoop?.getPlayerGold() ?? 0;
 
-        const gold = this.gameLoop.getPlayerGold();
-        if (this.goldLabel) {
-            this.goldLabel.string = `Gold: ${gold}`;
+        // Prefer bound node
+        const goldNode = this.goldLabelNode;
+        if (goldNode) {
+            const label = goldNode.getComponent(Label);
+            if (label) {
+                label.string = `Gold: ${gold}`;
+            }
+            return;
+        }
+
+        // Fallback
+        if (this.runtimeGoldLabel) {
+            this.runtimeGoldLabel.string = `Gold: ${gold}`;
         }
     }
 
     /**
-     * Update refresh cost display
+     * Update refresh button cost display
      */
-    private updateRefreshCostDisplay(): void {
-        if (!this.shopManager || !this.refreshCostLabel) return;
+    private updateRefreshDisplay(): void {
+        const cost = this.shopManager?.getRefreshCost() ?? 2;
 
-        const cost = this.shopManager.getRefreshCost();
-        this.refreshCostLabel.string = `Refresh: ${cost}g`;
+        // Prefer bound refresh node label
+        const refreshNode = this.refreshBtn;
+        if (refreshNode) {
+            const labelNode = refreshNode.getChildByName('label');
+            const label = labelNode?.getComponent(Label);
+            if (label) {
+                label.string = `Refresh: ${cost}g`;
+            }
+            return;
+        }
+
+        // Fallback
+        if (this.runtimeRefreshLabel) {
+            this.runtimeRefreshLabel.string = `Refresh: ${cost}g`;
+        }
     }
 
     /**
      * Update all slot displays
      */
-    private updateSlots(): void {
-        if (!this.shopManager) return;
-
-        for (let i = 0; i < 5; i++) {
+    private updateAllSlots(): void {
+        for (let i = 0; i < this.slotCount; i++) {
             this.updateSlot(i);
         }
     }
 
     /**
-     * Update single slot
+     * Update a single slot display
      */
     private updateSlot(index: number): void {
-        const slotNode = this.slotNodes.get(index);
-        if (!slotNode || !this.shopManager) return;
+        if (!this.shopManager) return;
+        if (index >= this.slotBindings.length) return;
 
+        const binding = this.slotBindings[index];
         const slot = this.shopManager.getSlot(index);
-        if (!slot) return;
 
-        // Find children
-        const emojiLabel = slotNode.getChildByName('emoji')?.getComponent(Label);
-        const priceLabel = slotNode.getChildByName('price')?.getComponent(Label);
-        const graphics = slotNode.getComponent(Graphics);
-
-        if (slot.purchased) {
-            // Purchased - show empty
-            if (emojiLabel) emojiLabel.string = '✓';
-            if (priceLabel) priceLabel.string = '';
-            if (graphics) graphics.fillColor = this.purchasedColor;
-        } else if (slot.locked) {
-            // Locked - show lock icon
-            if (emojiLabel) emojiLabel.string = '🔒';
-            if (priceLabel) priceLabel.string = `${slot.price}g`;
-            if (graphics) graphics.fillColor = this.lockedColor;
-        } else {
-            // Available - show item
-            const template = (this.shopManager as any).itemDB?.getTemplate(slot.templateId);
-            if (emojiLabel) emojiLabel.string = template?.emoji ?? '?';
-            if (priceLabel) priceLabel.string = `${slot.price}g`;
-            if (graphics) graphics.fillColor = this.slotColor;
+        if (!slot) {
+            this.setSlotEmpty(binding);
+            return;
         }
 
-        // Redraw background
-        graphics?.rect(-this.slotSize / 2, -this.slotSize / 2, this.slotSize, this.slotSize);
-        graphics?.fill();
+        // Get template info for icon/color
+        const template = this.itemDB?.getTemplate(slot.templateId);
+
+        // Update icon
+        if (binding.icon) {
+            const label = binding.icon.getComponent(Label);
+            if (label) {
+                if (slot.purchased) {
+                    label.string = '✓';
+                    label.color = this.purchasedColor;
+                } else if (template?.emoji) {
+                    label.string = template.emoji;
+                    label.color = this.textColor;
+                } else {
+                    label.string = '?';
+                    label.color = this.textColor;
+                }
+            }
+        }
+
+        // Update price
+        if (binding.price) {
+            const label = binding.price.getComponent(Label);
+            if (label) {
+                if (slot.purchased) {
+                    label.string = 'SOLD';
+                    label.color = this.purchasedColor;
+                } else {
+                    label.string = `${slot.price}g`;
+                    label.color = this.goldColor;
+                }
+            }
+        }
+
+        // Update lock button visual
+        if (binding.lockBtn) {
+            const label = binding.lockBtn.getComponent(Label);
+            if (label) {
+                label.string = slot.locked ? '🔒' : '🔓';
+            }
+        }
+
+        // Update buy button interactivity
+        if (binding.buyBtn) {
+            // Disable touch on purchased slots
+            if (slot.purchased) {
+                binding.buyBtn.off(EventTouch.TOUCH_END);
+            }
+        }
+
+        // Update slot background color via Sprite on bg node
+        const runtimeNode = this.runtimeSlotNodes.get(index);
+        if (runtimeNode) {
+            const bgNode = runtimeNode.getChildByName('bg');
+            const sprite = bgNode?.getComponent(Sprite);
+            if (sprite) {
+                if (slot.purchased) {
+                    sprite.color = this.purchasedColor;
+                } else if (slot.locked) {
+                    sprite.color = this.lockedColor;
+                } else {
+                    sprite.color = this.slotColor;
+                }
+            }
+        }
     }
 
-    // ============= Public Methods =============
+    /**
+     * Set slot to empty state
+     */
+    private setSlotEmpty(binding: SlotBinding): void {
+        if (binding.icon) {
+            const label = binding.icon.getComponent(Label);
+            if (label) {
+                label.string = '';
+            }
+        }
+        if (binding.price) {
+            const label = binding.price.getComponent(Label);
+            if (label) {
+                label.string = '';
+            }
+        }
+    }
+
+    // ============= Public API =============
 
     /**
-     * Update gold - call this when gold changes externally
+     * Get slot count
      */
-    public updateGold(): void {
-        this.updateGoldDisplay();
+    public getSlotCount(): number {
+        return this.slotCount;
     }
 
     /**
-     * Refresh shop display - call after any shop change
+     * Get shop manager reference
      */
-    public refreshShop(): void {
-        this.refreshDisplay();
+    public getShopManager(): ShopManager | null {
+        return this.shopManager;
+    }
+
+    /**
+     * Force refresh (alias for refreshShopUI)
+     */
+    public forceRefresh(): void {
+        this.refreshShopUI();
+    }
+
+    // ============= Cleanup =============
+
+    public onDestroy(): void {
+        this.runtimeSlotNodes.forEach(node => node.destroy());
+        this.runtimeSlotNodes.clear();
+        this.slotBindings = [];
+        this.onBuyCallback = null;
+        this.onRefreshCallback = null;
+        this.onLockCallback = null;
     }
 }
