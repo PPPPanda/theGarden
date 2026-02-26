@@ -133,6 +133,10 @@ export class MainScene extends Component {
         // Initialize BattlePanel (moved from start())
         if (this.battlePanel) {
             this.battlePanel.init(this.gameLoop);
+            // Wire continue button to transition to next day
+            this.battlePanel.setOnContinue(() => {
+                this.continueToNextDay();
+            });
         }
     }
 

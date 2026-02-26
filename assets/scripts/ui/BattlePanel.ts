@@ -89,6 +89,10 @@ export class BattlePanel extends Component {
     private isAutoMode: boolean = false;
     private autoAdvanceDelay: number = 1.0; // seconds
 
+    // Callbacks
+    private onContinueCallback: (() => void) | null = null;
+    private continueClickTarget: any = null; // Store click event target for cleanup
+
     // Colors
     private readonly PLAYER_COLOR = new Color(76, 175, 80, 255);    // Green
     private readonly ENEMY_COLOR = new Color(244, 67, 54, 255);    // Red
@@ -132,6 +136,43 @@ export class BattlePanel extends Component {
      */
     public init(gameLoop: GameLoop): void {
         this.gameLoop = gameLoop;
+    }
+
+    /**
+     * Set callback for continue button click
+     */
+    public setOnContinue(callback: () => void): void {
+        this.onContinueCallback = callback;
+        this.setupContinueButtonListener();
+    }
+
+    /**
+     * Setup click listener on continue button
+     */
+    private setupContinueButtonListener(): void {
+        if (!this.continueButton) return;
+        
+        // Try to use button component first
+        const buttonComp = this.continueButton.getComponent('cc.Button');
+        if (buttonComp) {
+            // Use button's click events
+            const clickEvent = buttonComp.clickEvents?.[0];
+            if (clickEvent) {
+                // Already has click event, no need to add more
+                return;
+            }
+        }
+        
+        // Fallback: add touch listener directly
+        this.continueButton.on('click', this.onContinueClicked, this);
+        this.continueClickTarget = this.continueButton;
+    }
+
+    /**
+     * Handle continue button click
+     */
+    private onContinueClicked(): void {
+        this.continueToNext();
     }
 
     // ============= Battle Flow =============
@@ -695,10 +736,13 @@ export class BattlePanel extends Component {
      * Continue to next phase (called when user clicks continue)
      */
     public continueToNext(): void {
+        // Call the callback first (e.g., to transition to next day)
+        if (this.onContinueCallback) {
+            this.onContinueCallback();
+        }
+        
         // Hide panel
         this.hide();
-        
-        // GameLoop will handle transitioning to next phase
     }
 
     // ============= Auto Mode =============
@@ -760,6 +804,12 @@ export class BattlePanel extends Component {
      * onDestroy - Called when component is destroyed
      */
     onDestroy(): void {
+        // Clean up continue button listener
+        if (this.continueClickTarget) {
+            this.continueClickTarget.off('click', this.onContinueClicked, this);
+            this.continueClickTarget = null;
+        }
+        
         this.hide();
         this.gameLoop = null;
         this.battleEngine = null;
