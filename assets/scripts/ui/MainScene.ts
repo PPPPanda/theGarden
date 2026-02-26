@@ -461,8 +461,24 @@ export class MainScene extends Component {
     /**
      * Run full battle (legacy method)
      */
+    /**
+     * Run full battle (legacy - prefer startBattle/finishBattle)
+     */
     public runFullBattle() {
+        // Use proper state machine flow
+        if (!this.startBattle()) {
+            return null;
+        }
+        
         const result = this.gameLoop.runFullBattle();
+        
+        // Update battle panel UI
+        if (this.battlePanel) {
+            this.battlePanel.runFullBattle();
+        }
+        
+        // Transition to Result stage
+        this.finishBattle();
         
         // Update views
         this.playerGridView.refresh();
@@ -556,11 +572,18 @@ export class MainScene extends Component {
     }
 
     /**
-     * Advance battle (single step)
+     * Advance battle (single step) - checks if battle ended and transitions to Result
      */
     public advanceBattleStep(): boolean {
         if (this.battlePanel) {
-            return this.battlePanel.advanceBattle();
+            const continued = this.battlePanel.advanceBattle();
+            
+            // Check if battle finished after this step
+            if (!continued && this.battlePanel.isBattleFinished()) {
+                this.finishBattle();
+            }
+            
+            return continued;
         }
         return false;
     }
