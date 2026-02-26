@@ -31,7 +31,7 @@ export class ShopPanel extends Component {
     public slotGap: number = 10;
 
     @property({ type: Number, tooltip: 'Number of shop slots (3-5)' })
-    public slotCount: number = 4;
+    public slotCount: number = 5;
 
     // ============= Slot 0 Bindings =============
 
