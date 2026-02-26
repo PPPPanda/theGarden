@@ -16,6 +16,24 @@ export class HUD extends Component {
     @property({ type: Number, tooltip: 'Update interval in seconds' })
     public updateInterval: number = 0.1;
 
+    // ============= Node Bindings =============
+
+    /** HP bar fill node (for Sprite scaling) */
+    @property({ type: Node, tooltip: 'HP bar fill (scale X for health)' })
+    public hpBarFill: Node | null = null;
+
+    /** HP text label node */
+    @property({ type: Node, tooltip: 'HP text label' })
+    public hpText: Node | null = null;
+
+    /** Gold text label node */
+    @property({ type: Node, tooltip: 'Gold text label' })
+    public goldText: Node | null = null;
+
+    /** Day text label node */
+    @property({ type: Node, tooltip: 'Day text label' })
+    public dayText: Node | null = null;
+
     // Colors
     @property({ type: Color, tooltip: 'Normal gold color' })
     public goldColor: Color = new Color(255, 215, 0, 255);
@@ -237,16 +255,23 @@ export class HUD extends Component {
      * Update gold display
      */
     private updateGold(): void {
-        if (!this.gameLoop || !this.goldLabel) return;
+        if (!this.gameLoop) return;
 
         const gold = this.gameLoop.getPlayerGold();
-        this.goldLabel.string = `Gold: ${gold}`;
 
-        // Warning color if low gold
-        if (gold <= this.goldWarningThreshold) {
-            this.goldLabel.color = this.goldWarningColor;
-        } else {
-            this.goldLabel.color = this.goldColor;
+        // Update bound goldText node if available
+        if (this.goldText) {
+            const label = this.goldText.getComponent(Label);
+            if (label) {
+                label.string = `Gold: ${gold}`;
+                label.color = gold <= this.goldWarningThreshold ? this.goldWarningColor : this.goldColor;
+            }
+        }
+
+        // Also update auto-created label
+        if (this.goldLabel) {
+            this.goldLabel.string = `Gold: ${gold}`;
+            this.goldLabel.color = gold <= this.goldWarningThreshold ? this.goldWarningColor : this.goldColor;
         }
     }
 
@@ -254,10 +279,22 @@ export class HUD extends Component {
      * Update day display
      */
     private updateDay(): void {
-        if (!this.gameLoop || !this.dayLabel) return;
+        if (!this.gameLoop) return;
 
         const day = this.gameLoop.getDay();
-        this.dayLabel.string = `Day ${day}`;
+
+        // Update bound dayText node if available
+        if (this.dayText) {
+            const label = this.dayText.getComponent(Label);
+            if (label) {
+                label.string = `Day ${day}`;
+            }
+        }
+
+        // Also update auto-created label
+        if (this.dayLabel) {
+            this.dayLabel.string = `Day ${day}`;
+        }
     }
 
     /**
@@ -289,6 +326,20 @@ export class HUD extends Component {
         const playerMaxHp = (this.gameLoop as any).getPlayerMaxHp?.() ?? 100;
         const enemyHp = (this.gameLoop as any).getEnemyHp?.() ?? 100;
         const enemyMaxHp = (this.gameLoop as any).getEnemyMaxHp?.() ?? 100;
+
+        // Update bound hpBarFill node if available (scale X for health ratio)
+        if (this.hpBarFill) {
+            const ratio = playerMaxHp > 0 ? Math.max(0, playerHp / playerMaxHp) : 0;
+            this.hpBarFill.setScale(ratio, 1, 1);
+        }
+
+        // Update bound hpText node if available
+        if (this.hpText) {
+            const label = this.hpText.getComponent(Label);
+            if (label) {
+                label.string = `${Math.ceil(playerHp)}/${Math.ceil(playerMaxHp)}`;
+            }
+        }
 
         this.updateHpBar(this.playerHpBar, this.playerHpText, playerHp, playerMaxHp, 'Player');
         this.updateHpBar(this.enemyHpBar, this.enemyHpText, enemyHp, enemyMaxHp, 'Enemy');
