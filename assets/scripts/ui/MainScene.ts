@@ -58,6 +58,9 @@ export class MainScene extends Component {
             this.hud.init(this.gameLoop);
         }
         
+        // Setup backup input handlers with diagnostic logging
+        this.setupBackupInputHandlers();
+        
         // Auto-advance from Loading to Shop on startup
         this.transitionToStage(SceneStage.Shop);
         
@@ -168,6 +171,20 @@ export class MainScene extends Component {
      * Called when the component is destroyed
      */
     onDestroy(): void {
+        // Cleanup backup input listeners to prevent memory leaks
+        if (this._backupInputRegistered) {
+            if (this.enterGridBtn) {
+                this.enterGridBtn.off('touchend', this._onEnterGridTouched, this);
+            }
+            if (this.startBattleBtn) {
+                this.startBattleBtn.off('touchend', this._onStartBattleTouched, this);
+            }
+            if (this.continueNextDayBtn) {
+                this.continueNextDayBtn.off('touchend', this._onContinueNextDayTouched, this);
+            }
+            this._backupInputRegistered = false;
+        }
+        
         this.playerGridView.destroy();
         this.enemyGridView.destroy();
         if (this.battlePanel) {
@@ -211,6 +228,17 @@ export class MainScene extends Component {
     @property({ type: ShopPanel, tooltip: 'Shop panel component' })
     public shopPanel: ShopPanel | null = null;
 
+    // ============= Flow Control Buttons =============
+
+    @property({ type: Node, tooltip: 'Enter Grid button node' })
+    public enterGridBtn: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Start Battle button node' })
+    public startBattleBtn: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Continue Next Day button node' })
+    public continueNextDayBtn: Node | null = null;
+
     // ============= Private Fields =============
 
     private gameLoop!: GameLoop;
@@ -218,6 +246,9 @@ export class MainScene extends Component {
     private enemyGridView!: GridView;
     private isInitialized: boolean = false;
     private stageMachine!: SceneFlowStateMachine;
+    
+    // Backup input registration flags (one-time protection)
+    private _backupInputRegistered: boolean = false;
 
     /**
      * Get current game phase
@@ -529,6 +560,98 @@ export class MainScene extends Component {
             if (this.centerContentNode) {
                 this.screenAdapter.registerCenterContent(this.centerContentNode);
             }
+        }
+    }
+
+    /**
+     * Setup backup input handlers for FlowControls buttons.
+     * Provides diagnostic logging and TOUCH_END fallback if clickEvents fail.
+     * Uses one-time registration protection to avoid duplicates.
+     */
+    private setupBackupInputHandlers(): void {
+        if (this._backupInputRegistered) {
+            console.warn('[MainScene] Backup input already registered, skipping');
+            return;
+        }
+        
+        console.log('[MainScene] Setting up backup input handlers...');
+        
+        // Diagnostic: Check button availability
+        const buttons = [
+            { name: 'EnterGridBtn', node: this.enterGridBtn },
+            { name: 'StartBattleBtn', node: this.startBattleBtn },
+            { name: 'ContinueNextDayBtn', node: this.continueNextDayBtn },
+        ];
+        
+        for (const btn of buttons) {
+            if (btn.node) {
+                // Check for Button component and clickEvents
+                const buttonComp = btn.node.getComponent('cc.Button') as any;
+                const hasClickEvents = buttonComp && buttonComp.clickEvents && buttonComp.clickEvents.length > 0;
+                console.log(`[MainScene] ${btn.name}: found, Button component: ${!!buttonComp}, clickEvents: ${hasClickEvents ? 'yes' : 'none'}`);
+            } else {
+                console.log(`[MainScene] ${btn.name}: NOT FOUND in @property bindings`);
+            }
+        }
+        
+        // Register backup TOUCH_END listeners
+        // Use 'touchend' string event type per Cocos 3.x best practices
+        
+        if (this.enterGridBtn) {
+            this.enterGridBtn.on('touchend', this._onEnterGridTouched, this);
+            console.log('[MainScene] Registered backup touchend for EnterGridBtn');
+        }
+        
+        if (this.startBattleBtn) {
+            this.startBattleBtn.on('touchend', this._onStartBattleTouched, this);
+            console.log('[MainScene] Registered backup touchend for StartBattleBtn');
+        }
+        
+        if (this.continueNextDayBtn) {
+            this.continueNextDayBtn.on('touchend', this._onContinueNextDayTouched, this);
+            console.log('[MainScene] Registered backup touchend for ContinueNextDayBtn');
+        }
+        
+        this._backupInputRegistered = true;
+        console.log('[MainScene] Backup input handlers setup complete');
+    }
+
+    // Backup touch handlers with diagnostic logging
+    
+    private _onEnterGridTouched(): void {
+        const currentStage = this.getCurrentStage();
+        console.log(`[MainScene] ENTER_GRID touched! Current stage: ${currentStage}`);
+        
+        if (this.canTransitionTo(SceneStage.Grid)) {
+            const result = this.transitionToStage(SceneStage.Grid);
+            console.log(`[MainScene] Stage transition to Grid: ${result.ok ? 'SUCCESS' : 'FAILED'} (error: ${result.error})`);
+        } else {
+            console.log(`[MainScene] Cannot transition to Grid from ${currentStage}`);
+        }
+    }
+    
+    private _onStartBattleTouched(): void {
+        const currentStage = this.getCurrentStage();
+        console.log(`[MainScene] START_BATTLE touched! Current stage: ${currentStage}`);
+        
+        if (this.canTransitionTo(SceneStage.Battle)) {
+            const result = this.transitionToStage(SceneStage.Battle);
+            console.log(`[MainScene] Stage transition to Battle: ${result.ok ? 'SUCCESS' : 'FAILED'} (error: ${result.error})`);
+        } else {
+            console.log(`[MainScene] Cannot transition to Battle from ${currentStage}`);
+        }
+    }
+    
+    private _onContinueNextDayTouched(): void {
+        const currentStage = this.getCurrentStage();
+        console.log(`[MainScene] CONTINUE_NEXT_DAY touched! Current stage: ${currentStage}`);
+        
+        // Result stage should transition back to Shop
+        if (this.canTransitionTo(SceneStage.Shop)) {
+            const result = this.transitionToStage(SceneStage.Shop);
+            console.log(`[MainScene] Stage transition to Shop: ${result.ok ? 'SUCCESS' : 'FAILED'} (error: ${result.error})`);
+        } else {
+            console.log(`[MainScene] Cannot transition to Shop from ${currentStage}`);
         }
     }
 
