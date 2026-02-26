@@ -3,7 +3,7 @@
  * Handles different screen sizes, aspect ratios, and safe areas
  */
 
-import { _decorator, Component, Node, UITransform, view, Vec2 } from 'cc';
+import { _decorator, Component, Node, UITransform, view, Vec2, CCFloat } from 'cc';
 
 const { ccclass, property } = _decorator;
 
@@ -57,28 +57,28 @@ export class ScreenAdapter extends Component {
     @property({ tooltip: 'Target orientation (portrait / landscape / auto)' })
     public targetOrientation: Orientation = Orientation.Portrait;
 
-    @property({ type: Number, tooltip: 'Reference design width' })
+    @property({ type: CCFloat, tooltip: 'Reference design width' })
     public referenceWidth: number = REFERENCE_WIDTH;
 
-    @property({ type: Number, tooltip: 'Reference design height' })
+    @property({ type: CCFloat, tooltip: 'Reference design height' })
     public referenceHeight: number = REFERENCE_HEIGHT;
 
-    @property({ type: Number, tooltip: 'Minimum safe area padding (percentage)' })
+    @property({ type: CCFloat, tooltip: 'Minimum safe area padding (percentage)' })
     public minSafeAreaPadding: number = 0.02; // 2%
 
-    @property({ type: Number, tooltip: 'HUD top margin (percentage)' })
+    @property({ type: CCFloat, tooltip: 'HUD top margin (percentage)' })
     public hudTopMargin: number = 0.08; // 8%
 
-    @property({ type: Number, tooltip: 'HUD bottom margin (percentage)' })
+    @property({ type: CCFloat, tooltip: 'HUD bottom margin (percentage)' })
     public hudBottomMargin: number = 0.12; // 12%
 
-    @property({ type: Number, tooltip: 'Side margins (percentage)' })
+    @property({ type: CCFloat, tooltip: 'Side margins (percentage)' })
     public sideMargin: number = 0.03; // 3%
 
-    @property({ type: Number, tooltip: 'Button minimum size (pixels)' })
+    @property({ type: CCFloat, tooltip: 'Button minimum size (pixels)' })
     public minButtonSize: number = 44; // Touch-friendly size
 
-    @property({ type: Number, tooltip: 'Grid maximum width percentage' })
+    @property({ type: CCFloat, tooltip: 'Grid maximum width percentage' })
     public maxGridWidthPercent: number = 0.9; // 90%
 
     // ============= Private Fields =============
@@ -326,50 +326,54 @@ export class ScreenAdapter extends Component {
     }
 
     /**
-     * Update HUD positions (top and bottom bars)
+     * Update HUD positions (top and bottom bars).
+     * Cocos UI coordinate origin is at the CENTER of the Canvas.
+     * Top edge = +screenSize.y/2, Bottom edge = -screenSize.y/2.
      */
     private updateHudPositions(): void {
-        const safeArea = this.getSafeAreaPercent();
-        
-        // Top HUD position
+        const safeArea = this._safeArea; // In pixels
+        const halfH = this._screenSize.y / 2;
+
+        // Top HUD — anchored to top edge minus safe-area inset
         if (this._hudTopNode) {
             const transform = this._hudTopNode.getComponent(UITransform);
             if (transform) {
-                const y = this._screenSize.y - safeArea.top - (transform.height * this._scaleFactor) / 2;
+                const y = halfH - safeArea.top - transform.height / 2;
                 this._hudTopNode.setPosition(0, y, 0);
             }
         }
 
-        // Bottom HUD position
+        // Bottom HUD — anchored to bottom edge plus safe-area inset
         if (this._hudBottomNode) {
             const transform = this._hudBottomNode.getComponent(UITransform);
             if (transform) {
-                const y = safeArea.bottom + (transform.height * this._scaleFactor) / 2;
-                this._hudBottomNode.setPosition(0, -y, 0);
+                const y = -halfH + safeArea.bottom + transform.height / 2;
+                this._hudBottomNode.setPosition(0, y, 0);
             }
         }
     }
 
     /**
-     * Update side panels
+     * Update side panels (Cocos centered coordinates).
      */
     private updatePanels(): void {
-        const safeArea = this.getSafeAreaPercent();
-        
-        // Left panel
+        const safeArea = this._safeArea; // In pixels
+        const halfW = this._screenSize.x / 2;
+
+        // Left panel — anchored to left edge plus safe-area inset
         if (this._leftPanelNode) {
             const transform = this._leftPanelNode.getComponent(UITransform);
             if (transform) {
-                const x = safeArea.left + (transform.width * this._scaleFactor) / 2;
+                const x = -halfW + safeArea.left + transform.width / 2;
                 this._leftPanelNode.setPosition(x, 0, 0);
             }
         }
 
-        // Right panel
+        // Right panel — anchored to right edge minus safe-area inset
         if (this._rightPanelNode) {
             const transform = this._rightPanelNode.getComponent(UITransform);
             if (transform) {
-                const x = -(safeArea.right + (transform.width * this._scaleFactor) / 2);
+                const x = halfW - safeArea.right - transform.width / 2;
                 this._rightPanelNode.setPosition(x, 0, 0);
             }
         }

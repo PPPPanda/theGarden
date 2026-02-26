@@ -4,7 +4,7 @@
  * All drag logic is delegated to GridDragController.
  */
 
-import { _decorator, Component, Node, Sprite, Label, Color, UITransform, Vec3, input } from 'cc';
+import { _decorator, Component, Node, Sprite, Label, Color, UITransform, Vec3, input, CCFloat } from 'cc';
 import { GridManager } from '../core/GridManager';
 import { ItemDB } from '../core/ItemDB';
 import { GameLoop } from '../core/GameLoop';
@@ -18,10 +18,10 @@ const { ccclass, property } = _decorator;
 export class GridPanelComp extends Component {
     // ============= Layout Properties =============
 
-    @property({ type: Number, tooltip: 'Cell gap in pixels' })
+    @property({ type: CCFloat, tooltip: 'Cell gap in pixels' })
     public cellGap: number = 2;
 
-    @property({ type: Number, tooltip: 'Cell size in pixels (0 = auto)' })
+    @property({ type: CCFloat, tooltip: 'Cell size in pixels (0 = auto)' })
     public cellSize: number = 0;
 
     @property({ type: Node, tooltip: 'Container node for grid cells' })
@@ -41,7 +41,7 @@ export class GridPanelComp extends Component {
     @property({ type: Color, tooltip: 'Selected border color' })
     public selectedBorderColor: Color = new Color(255, 193, 7, 255);
 
-    @property({ type: Number, tooltip: 'Selected border width' })
+    @property({ type: CCFloat, tooltip: 'Selected border width' })
     public selectedBorderWidth: number = 3;
 
     @property({ type: Color, tooltip: 'Valid drop target color' })

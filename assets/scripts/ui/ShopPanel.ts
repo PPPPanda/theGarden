@@ -4,7 +4,7 @@
  * All purchase/refresh/lock logic delegated via callbacks to MainScene.
  */
 
-import { _decorator, Component, Node, Label, Color, UITransform, EventTouch, Sprite, Button } from 'cc';
+import { _decorator, Component, Node, Label, Color, UITransform, EventTouch, Sprite, Button, CCFloat, CCInteger } from 'cc';
 import { ShopManager } from '../core/ShopManager';
 import { GameLoop } from '../core/GameLoop';
 import { ItemDB } from '../core/ItemDB';
@@ -24,13 +24,13 @@ interface SlotBinding {
 export class ShopPanel extends Component {
     // ============= Layout Properties =============
 
-    @property({ type: Number, tooltip: 'Shop slot size in pixels' })
+    @property({ type: CCFloat, tooltip: 'Shop slot size in pixels' })
     public slotSize: number = 80;
 
-    @property({ type: Number, tooltip: 'Gap between slots' })
+    @property({ type: CCFloat, tooltip: 'Gap between slots' })
     public slotGap: number = 10;
 
-    @property({ type: Number, tooltip: 'Number of shop slots (3-5)' })
+    @property({ type: CCInteger, tooltip: 'Number of shop slots (3-5)' })
     public slotCount: number = 5;
 
     // ============= Slot 0 Bindings =============
@@ -589,6 +589,39 @@ export class ShopPanel extends Component {
     }
 
     /**
+     * Resolve or create a Label component on the given icon node.
+     * Scene Icon nodes may have cc.Sprite (no Label). In that case,
+     * create a child node with a Label for text-based (emoji) display.
+     */
+    private resolveIconLabel(iconNode: Node): Label | null {
+        // Prefer existing Label on the node itself
+        let label = iconNode.getComponent(Label);
+        if (label) return label;
+
+        // Check for previously-created child label
+        let child = iconNode.getChildByName('_iconLabel');
+        if (child) {
+            return child.getComponent(Label);
+        }
+
+        // Create a child Label (Sprite stays for future texture-based icons)
+        child = new Node('_iconLabel');
+        const transform = child.addComponent(UITransform);
+        const parentTransform = iconNode.getComponent(UITransform);
+        if (parentTransform) {
+            transform.setContentSize(parentTransform.contentSize);
+        } else {
+            transform.setContentSize(56, 56);
+        }
+        label = child.addComponent(Label);
+        label.fontSize = Math.floor(this.slotSize * 0.45);
+        label.horizontalAlign = Label.HorizontalAlign.CENTER;
+        label.verticalAlign = Label.VerticalAlign.CENTER;
+        iconNode.addChild(child);
+        return label;
+    }
+
+    /**
      * Update a single slot display
      */
     private updateSlot(index: number): void {
@@ -606,9 +639,9 @@ export class ShopPanel extends Component {
         // Get template info for icon/color
         const template = this.itemDB?.getTemplate(slot.templateId);
 
-        // Update icon
+        // Update icon (works with both Label-only and Sprite+child-Label nodes)
         if (binding.icon) {
-            const label = binding.icon.getComponent(Label);
+            const label = this.resolveIconLabel(binding.icon);
             if (label) {
                 if (slot.purchased) {
                     label.string = '✓';
@@ -673,7 +706,7 @@ export class ShopPanel extends Component {
      */
     private setSlotEmpty(binding: SlotBinding): void {
         if (binding.icon) {
-            const label = binding.icon.getComponent(Label);
+            const label = this.resolveIconLabel(binding.icon);
             if (label) {
                 label.string = '';
             }

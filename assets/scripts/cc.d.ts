@@ -111,6 +111,10 @@ export interface Vec3Interface {
 export type Vec3 = Vec3Interface;
 export const Vec3: new (...args?: number[]) => Vec3Interface;
 
+// CCFloat / CCInteger - numeric property type markers
+export const CCFloat: any;
+export const CCInteger: any;
+
 // Input - global input system
 export interface InputInterface {
     on(event: string, callback: Function, target?: any): void;
