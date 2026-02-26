@@ -9,6 +9,7 @@ import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
 import { BattlePanel, BattlePanelState } from './BattlePanel';
 import { ScreenAdapter, Orientation } from './ScreenAdapter';
+import { HUD } from './HUD';
 import { IGridItem, IItemTemplate, IShopSlot } from '../core/types';
 
 const { ccclass, property } = _decorator;
@@ -45,6 +46,11 @@ export class MainScene extends Component {
         
         // Initialize screen adapter
         this.initScreenAdapter();
+        
+        // Initialize HUD with gameLoop reference
+        if (this.hud) {
+            this.hud.init(this.gameLoop);
+        }
         
         this.isInitialized = true;
     }
@@ -85,6 +91,9 @@ export class MainScene extends Component {
 
     @property({ type: ScreenAdapter, tooltip: 'Screen adapter for resolution/safe-area' })
     public screenAdapter: ScreenAdapter | null = null;
+
+    @property({ type: HUD, tooltip: 'HUD component for HP/Gold/Day display' })
+    public hud: HUD | null = null;
 
     @property({ type: Node, tooltip: 'HUD top bar node (gold, day, mmr)' })
     public hudTopNode: Node | null = null;
@@ -476,6 +485,9 @@ export class MainScene extends Component {
         this.updateDayDisplay();
         this.updateMmrDisplay();
         this.updateRecordDisplay();
+        
+        // Force refresh HUD to update HP/Gold/Day
+        this.hud?.forceRefresh();
     }
 
     // ============= Game State =============
