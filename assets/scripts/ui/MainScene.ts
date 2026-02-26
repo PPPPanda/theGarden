@@ -538,26 +538,16 @@ export class MainScene extends Component {
     /**
      * Show battle start UI
      */
+    /**
+     * Show battle start UI - uses GameLoop's battle engine as single source
+     */
     public showBattleStartUI(): void {
         if (this.battlePanel) {
-            // Get current battle engine
-            const playerItems = this.gameLoop.getPlayerItems();
-            const enemyItems = this.gameLoop.getEnemyItems();
-            
-            // Create battle engine (same as in GameLoop.startBattle)
-            const { BattleEngine } = require('../core/BattleEngine');
-            const battleEngine = new BattleEngine({
-                playerItems,
-                enemyItems,
-                playerGrid: this.gameLoop.getPlayerGrid(),
-                enemyGrid: this.gameLoop.getEnemyGrid(),
-                seed: this.gameLoop.getDay() + Date.now(),
-                maxDuration: 60,
-                playerHp: 100,
-                enemyHp: 100
-            });
-            
-            this.battlePanel.startBattle(battleEngine);
+            // Get battle engine from GameLoop (single source of truth)
+            const battleEngine = this.gameLoop.getCurrentBattleEngine();
+            if (battleEngine) {
+                this.battlePanel.startBattle(battleEngine);
+            }
         }
     }
 
