@@ -212,10 +212,16 @@ export class GridPanelComp extends Component {
 
         const x = localPos.x;
         const y = localPos.y;
+        const step = this.actualCellSize + this.cellGap;
+
+        // Cells are positioned with negative Y, so we need to flip the sign
+        // Y=0 is top of grid, Y<0 is grid area
+        const effectiveY = y < 0 ? -y : y;
 
         // Calculate cell coordinates
-        const col = Math.floor(x / (this.actualCellSize + this.cellGap));
-        const row = (this.rows - 1) - Math.floor(y / (this.actualCellSize + this.cellGap));
+        const col = Math.floor(x / step);
+        const rowFromTop = Math.floor(effectiveY / step);
+        const row = (this.rows - 1) - rowFromTop;
 
         // Check bounds
         if (row >= 0 && row < this.rows && col >= 0 && col < this.cols) {
