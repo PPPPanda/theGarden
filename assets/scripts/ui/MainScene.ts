@@ -266,17 +266,15 @@ export class MainScene extends Component {
         this.setPanelVisible(this.gridPanel?.node ?? null, false);
         this.setPanelVisible(this.battlePanel?.node ?? null, false);
         
-        // Show panels based on stage
+        // Show ONLY the panel(s) for the current stage
         switch (stage) {
             case SceneStage.Loading:
                 // Loading - hide all game UI
                 break;
                 
             case SceneStage.Shop:
-                // Show shop and grid
+                // Show shop only (grid is separate stage)
                 this.setPanelVisible(this.shopPanel?.node ?? null, true);
-                this.setPanelVisible(this.gridPanel?.node ?? null, true);
-                // Refresh shop
                 this.shopPanel?.refreshShopUI();
                 break;
                 
@@ -576,9 +574,14 @@ export class MainScene extends Component {
     /**
      * Run full battle with UI
      */
+    /**
+     * Run full battle with UI (legacy method - prefer startBattle/finishBattle)
+     */
     public runBattleWithUI() {
-        // Show battle start
-        this.showBattleStartUI();
+        // Use proper state machine flow
+        if (!this.startBattle()) {
+            return null;
+        }
         
         // Run full battle
         const result = this.gameLoop.runFullBattle();
@@ -587,6 +590,9 @@ export class MainScene extends Component {
         if (this.battlePanel) {
             this.battlePanel.runFullBattle();
         }
+        
+        // Transition to Result
+        this.finishBattle();
         
         // Update views
         this.playerGridView.refresh();
