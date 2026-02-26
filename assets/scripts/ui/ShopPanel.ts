@@ -89,6 +89,20 @@ export class ShopPanel extends Component {
     @property({ type: Node, tooltip: 'Slot 3 lock button node' })
     public slot3LockBtn: Node | null = null;
 
+    // ============= Slot 4 Bindings =============
+
+    @property({ type: Node, tooltip: 'Slot 4 icon node (Label/Sprite)' })
+    public slot4Icon: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 4 price label node' })
+    public slot4Price: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 4 buy button node' })
+    public slot4BuyBtn: Node | null = null;
+
+    @property({ type: Node, tooltip: 'Slot 4 lock button node' })
+    public slot4LockBtn: Node | null = null;
+
     // ============= Global Bindings =============
 
     @property({ type: Node, tooltip: 'Refresh button node' })
@@ -227,6 +241,7 @@ export class ShopPanel extends Component {
             [this.slot1Icon, this.slot1Price, this.slot1BuyBtn, this.slot1LockBtn],
             [this.slot2Icon, this.slot2Price, this.slot2BuyBtn, this.slot2LockBtn],
             [this.slot3Icon, this.slot3Price, this.slot3BuyBtn, this.slot3LockBtn],
+            [this.slot4Icon, this.slot4Price, this.slot4BuyBtn, this.slot4LockBtn],
         ];
 
         for (let i = 0; i < this.slotCount; i++) {
@@ -331,8 +346,8 @@ export class ShopPanel extends Component {
         const startX = -totalWidth / 2 + this.slotSize / 2;
 
         for (let i = 0; i < this.slotCount; i++) {
-            // Skip if already bound
-            const boundSlots = [this.slot0Icon, this.slot1Icon, this.slot2Icon, this.slot3Icon];
+            // Skip if already bound via @property
+            const boundSlots = [this.slot0Icon, this.slot1Icon, this.slot2Icon, this.slot3Icon, this.slot4Icon];
             if (i < boundSlots.length && boundSlots[i]) continue;
 
             const slotNode = this.createFallbackSlot(i);
