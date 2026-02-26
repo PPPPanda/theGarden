@@ -137,6 +137,12 @@ export class ShopPanel extends Component {
     private onBuyCallback: ((slotIndex: number) => boolean) | null = null;
     private onRefreshCallback: (() => boolean) | null = null;
     private onLockCallback: ((slotIndex: number) => boolean) | null = null;
+    private onDragStartFromShopCallback: ((slotIndex: number, templateId: string, worldPos: {x: number, y: number}) => void) | null = null;
+
+    // Drag detection state
+    private dragTouchStartPos: {x: number, y: number} | null = null;
+    private dragStartSlotIndex: number = -1;
+    private readonly DRAG_THRESHOLD = 10; // pixels
 
     /**
      * Set buy callback — called when buy button pressed.
@@ -160,6 +166,13 @@ export class ShopPanel extends Component {
      */
     public setOnLock(callback: (slotIndex: number) => boolean): void {
         this.onLockCallback = callback;
+    }
+
+    /**
+     * Set drag start callback - called when user starts dragging from shop slot
+     */
+    public setOnDragStartFromShop(callback: (slotIndex: number, templateId: string, worldPos: {x: number, y: number}) => void): void {
+        this.onDragStartFromShopCallback = callback;
     }
 
     // ============= Initialization =============
@@ -246,6 +259,45 @@ export class ShopPanel extends Component {
                 binding.lockBtn.off(EventTouch.TOUCH_END);
                 binding.lockBtn.on(EventTouch.TOUCH_END, () => this.handleLock(slotIdx), this);
             }
+            
+            // Add drag detection on slot icon
+            if (binding.icon) {
+                binding.icon.off(EventTouch.TOUCH_START);
+                binding.icon.off(EventTouch.TOUCH_MOVE);
+                binding.icon.off(EventTouch.TOUCH_END);
+                
+                binding.icon.on(EventTouch.TOUCH_START, (event: EventTouch) => {
+                    const pos = event.touch?.getLocation();
+                    if (pos) {
+                        this.dragTouchStartPos = { x: pos.x, y: pos.y };
+                        this.dragStartSlotIndex = slotIdx;
+                    }
+                }, this);
+                
+                binding.icon.on(EventTouch.TOUCH_MOVE, (event: EventTouch) => {
+                    if (this.dragTouchStartPos && this.dragStartSlotIndex >= 0) {
+                        const pos = event.touch?.getLocation();
+                        if (pos) {
+                            const dx = pos.x - this.dragTouchStartPos.x;
+                            const dy = pos.y - this.dragTouchStartPos.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (dist > this.DRAG_THRESHOLD) {
+                                // Trigger drag start
+                                this.handleDragStart(slotIdx, { x: pos.x, y: pos.y });
+                                this.dragTouchStartPos = null;
+                                this.dragStartSlotIndex = -1;
+                            }
+                        }
+                    }
+                }, this);
+                
+                binding.icon.on(EventTouch.TOUCH_END, () => {
+                    // Reset drag state on touch end (was a tap, not drag)
+                    this.dragTouchStartPos = null;
+                    this.dragStartSlotIndex = -1;
+                }, this);
+            }
         }
 
         // Refresh button
@@ -254,6 +306,19 @@ export class ShopPanel extends Component {
             refreshNode.off(EventTouch.TOUCH_END);
             refreshNode.on(EventTouch.TOUCH_END, () => this.handleRefresh(), this);
         }
+    }
+
+    /**
+     * Handle drag start from shop slot
+     */
+    private handleDragStart(slotIndex: number, worldPos: {x: number, y: number}): void {
+        if (!this.onDragStartFromShopCallback) return;
+        
+        const slot = this.shopManager?.getSlot(slotIndex);
+        if (!slot || !slot.templateId) return;
+        
+        const templateId = slot.templateId;
+        this.onDragStartFromShopCallback(slotIndex, templateId, worldPos);
     }
 
     // ============= Fallback UI Creation =============

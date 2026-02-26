@@ -3,7 +3,7 @@
  * Coordinates all game systems and UI
  */
 
-import { _decorator, Component, Node } from 'cc';
+import { _decorator, Component, Node, Vec3 } from 'cc';
 import { GameLoop, GamePhase, getGameLoop } from '../core/GameLoop';
 import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
@@ -109,6 +109,13 @@ export class MainScene extends Component {
                     this.refreshAllViews();
                 }
                 return success;
+            });
+            
+            // Wire drag start from shop to grid
+            this.shopPanel.setOnDragStartFromShop((slotIndex, templateId, worldPos) => {
+                if (this.gridPanel) {
+                    this.gridPanel.startDragFromShop(templateId, slotIndex, new Vec3(worldPos.x, worldPos.y, 0));
+                }
             });
         }
         
