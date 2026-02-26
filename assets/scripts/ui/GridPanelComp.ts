@@ -3,7 +3,7 @@
  * Renders 10x10 grid using Sprite nodes with proper typing
  */
 
-import { _decorator, Component, Node, Sprite, Label, Color, UITransform, EventTouch, Vec3 } from 'cc';
+import { _decorator, Component, Node, Sprite, Label, Color, UITransform, EventTouch, Vec3, input } from 'cc';
 import { GridManager } from '../core/GridManager';
 import { ItemDB } from '../core/ItemDB';
 import { GameLoop } from '../core/GameLoop';
@@ -202,13 +202,16 @@ export class GridPanelComp extends Component {
      * Get cell position from world/touch position
      */
     public getCellFromPosition(worldPos: Vec3): IGridPosition | null {
-        const localPos = this.node.worldPosition;
         const containerTransform = this.container?.getComponent(UITransform) ?? this.node.getComponent(UITransform);
         if (!containerTransform) return null;
 
-        // Convert to local coordinates
-        const x = worldPos.x - localPos.x;
-        const y = worldPos.y - localPos.y;
+        // Use convertToNodeSpaceAR for proper coordinate conversion
+        const containerNode = this.container ?? this.node;
+        const localPos = containerNode.getComponent(UITransform)?.convertToNodeSpaceAR(worldPos);
+        if (!localPos) return null;
+
+        const x = localPos.x;
+        const y = localPos.y;
 
         // Calculate cell coordinates
         const col = Math.floor(x / (this.actualCellSize + this.cellGap));
@@ -303,9 +306,13 @@ export class GridPanelComp extends Component {
      * Setup global touch listeners for drag operations
      */
     private setupGlobalTouchListeners(): void {
+        // Use global input system for reliable cross-component drag
+        // This ensures we capture MOVE/END even when touch starts outside grid
+        
+        // We'll use node-level touch with capture phase on this node
         const targetNode = this.container ?? this.node;
         
-        // Use a transparent overlay node to capture all touch events
+        // Ensure touchOverlay exists for capturing
         if (!targetNode.getChildByName('touchOverlay')) {
             const overlay = new Node('touchOverlay');
             const transform = overlay.addComponent(UITransform);
@@ -317,30 +324,97 @@ export class GridPanelComp extends Component {
             }
             overlay.setPosition(transform.width / 2, -transform.height / 2, 0);
             targetNode.addChild(overlay);
-            
-            // Listen to all touch events on the overlay
-            overlay.on(EventTouch.TOUCH_START, (event: EventTouch) => this.onGlobalTouchStart(event), this);
-            overlay.on(EventTouch.TOUCH_MOVE, (event: EventTouch) => this.onGlobalTouchMove(event), this);
-            overlay.on(EventTouch.TOUCH_END, (event: EventTouch) => this.onGlobalTouchEnd(event), this);
+        }
+        
+        // Register global input listeners on this component's node
+        // Use capture phase to intercept before children
+        this.node.on(EventTouch.TOUCH_START, this.onTouchStartCapture, this, true);
+        this.node.on(EventTouch.TOUCH_MOVE, this.onTouchMoveCapture, this, true);
+        this.node.on(EventTouch.TOUCH_END, this.onTouchEndCapture, this, true);
+    }
+
+    /**
+     * Touch start capture phase - detect drag vs tap
+     */
+    private touchStartPos: Vec3 | null = null;
+    private isDragGesture: boolean = false;
+    private DRAG_THRESHOLD: number = 10; // pixels to consider as drag
+
+    private onTouchStartCapture(event: EventTouch): void {
+        const touchPos = event.getUILocation();
+        this.touchStartPos = new Vec3(touchPos.x, touchPos.y, 0);
+        this.isDragGesture = false;
+        
+        // Check if starting on an item - prepare for potential drag
+        const localPos = this.getCellFromPosition(this.touchStartPos);
+        if (localPos && this.gridManager) {
+            const itemId = this.gridManager.getItemAt(localPos);
+            if (itemId) {
+                // Store potential drag start cell
+                this.dragStartCell = localPos;
+            }
         }
     }
 
     /**
-     * Handle global touch start
+     * Touch move capture phase - handle drag
      */
-    private onGlobalTouchStart(event: EventTouch): void {
+    private onTouchMoveCapture(event: EventTouch): void {
         const touchPos = event.getUILocation();
-        const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
+        const currentPos = new Vec3(touchPos.x, touchPos.y, 0);
         
-        if (localPos && this.gridManager) {
-            const itemId = this.gridManager.getItemAt(localPos);
+        // Check if we've moved enough to consider this a drag
+        if (this.touchStartPos && !this.isDragGesture) {
+            const dx = currentPos.x - this.touchStartPos.x;
+            const dy = currentPos.y - this.touchStartPos.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > this.DRAG_THRESHOLD) {
+                this.isDragGesture = true;
+                this.startGridDragIfValid();
+            }
+        }
+        
+        // Update drag if active
+        if (this.isDragGesture) {
+            this.onGlobalTouchMove(event);
+            event.propagationStopped = true;
+        }
+    }
+
+    /**
+     * Touch end capture phase - handle drop or tap
+     */
+    private onTouchEndCapture(event: EventTouch): void {
+        if (this.isDragGesture) {
+            // Was dragging - handle drop
+            this.onGlobalTouchEnd(event);
+            event.propagationStopped = true;
+        } else if (this.dragStartCell) {
+            // Was a tap - trigger cell touch
+            const touchPos = event.getUILocation();
+            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
+            if (localPos) {
+                this.onCellTouch(localPos.row, localPos.col);
+            }
+        }
+        
+        // Reset state
+        this.touchStartPos = null;
+        this.isDragGesture = false;
+        this.dragStartCell = null;
+    }
+
+    /**
+     * Start grid drag if we have a valid item
+     */
+    private startGridDragIfValid(): void {
+        if (this.dragStartCell && this.gridManager && !this.isDraggingInGrid) {
+            const itemId = this.gridManager.getItemAt(this.dragStartCell);
             if (itemId) {
-                // Start grid internal drag
                 this.isDraggingInGrid = true;
                 this.draggingItemId = itemId;
-                this.dragStartCell = localPos;
-                this.createDragPreviewFromGrid(itemId, localPos);
-                event.propagationStopped = true;
+                this.createDragPreviewFromGrid(itemId, this.dragStartCell);
             }
         }
     }

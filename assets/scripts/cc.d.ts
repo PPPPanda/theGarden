@@ -106,3 +106,11 @@ export interface Vec3Interface {
 }
 export type Vec3 = Vec3Interface;
 export const Vec3: new (...args?: number[]) => Vec3Interface;
+
+// Input - global input system
+export interface InputInterface {
+    on(event: string, callback: Function, target?: any): void;
+    off(event: string, callback: Function, target?: any): void;
+    getTouches(): any[];
+}
+export const input: InputInterface;
