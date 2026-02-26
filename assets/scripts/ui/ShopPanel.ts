@@ -4,7 +4,7 @@
  * All purchase/refresh/lock logic delegated via callbacks to MainScene.
  */
 
-import { _decorator, Component, Node, Label, Color, UITransform, EventTouch, Sprite, Button, CCFloat, CCInteger } from 'cc';
+import { _decorator, Component, Node, Label, Color, UITransform, EventTouch, Sprite, Button, CCFloat, CCInteger, NodeEventType } from 'cc';
 import { ShopManager } from '../core/ShopManager';
 import { GameLoop } from '../core/GameLoop';
 import { ItemDB } from '../core/ItemDB';
@@ -261,23 +261,25 @@ export class ShopPanel extends Component {
      * Wire button events
      */
     private wireEvents(): void {
-        // Slot buy/lock buttons - use string 'touchend' per Cocos 3.x best practices
+        // Slot buy/lock buttons - use NodeEventType.TOUCH_END per Cocos 3.x
         for (let i = 0; i < this.slotBindings.length; i++) {
             const binding = this.slotBindings[i];
             const slotIdx = i;
 
             if (binding.buyBtn) {
-                binding.buyBtn.off('touchend');
-                binding.buyBtn.on('touchend', () => {
+                binding.buyBtn.off(NodeEventType.TOUCH_END);
+                binding.buyBtn.on(NodeEventType.TOUCH_END, () => {
                     console.log(`[ShopPanel] BUY touched at slot ${slotIdx}`);
-                    this.handleBuy(slotIdx);
+                    const result = this.handleBuy(slotIdx);
+                    console.log(`[ShopPanel] BUY result: ${result ? 'SUCCESS' : 'FAILED'}`);
                 }, this);
             }
             if (binding.lockBtn) {
-                binding.lockBtn.off('touchend');
-                binding.lockBtn.on('touchend', () => {
+                binding.lockBtn.off(NodeEventType.TOUCH_END);
+                binding.lockBtn.on(NodeEventType.TOUCH_END, () => {
                     console.log(`[ShopPanel] LOCK touched at slot ${slotIdx}`);
-                    this.handleLock(slotIdx);
+                    const result = this.handleLock(slotIdx);
+                    console.log(`[ShopPanel] LOCK result: ${result ? 'SUCCESS' : 'FAILED'}`);
                 }, this);
             }
             
@@ -321,13 +323,14 @@ export class ShopPanel extends Component {
             }
         }
 
-        // Refresh button - use string 'touchend'
+        // Refresh button - use NodeEventType.TOUCH_END
         const refreshNode = this.refreshBtn ?? this.node.getChildByName('refreshBtn');
         if (refreshNode) {
-            refreshNode.off('touchend');
-            refreshNode.on('touchend', () => {
+            refreshNode.off(NodeEventType.TOUCH_END);
+            refreshNode.on(NodeEventType.TOUCH_END, () => {
                 console.log('[ShopPanel] REFRESH touched');
-                this.handleRefresh();
+                const result = this.handleRefresh();
+                console.log(`[ShopPanel] REFRESH result: ${result ? 'SUCCESS' : 'FAILED'}`);
             }, this);
         }
     }
@@ -477,68 +480,75 @@ export class ShopPanel extends Component {
     // ============= Event Handlers (delegate to callbacks) =============
 
     /**
-     * Handle buy button press
+     * Handle buy button press - returns success status
      */
-    private handleBuy(slotIndex: number): void {
+    private handleBuy(slotIndex: number): boolean {
         // Check if slot is already purchased
         const slot = this.shopManager?.getSlot(slotIndex);
         if (!slot) {
             console.warn('ShopPanel: invalid slot index');
-            return;
+            return false;
         }
         if (slot.purchased) {
             console.warn('ShopPanel: slot already purchased');
-            return;
+            return false;
         }
 
         if (this.onBuyCallback) {
             const success = this.onBuyCallback(slotIndex);
             if (success) {
                 this.refreshShopUI();
+                return true;
             }
-            return;
+            return false;
         }
 
         // No callback set — purchase requires position from MainScene
         console.warn('ShopPanel: no onBuy callback set, purchase requires MainScene wiring');
+        return false;
     }
 
     /**
-     * Handle refresh button press
+     * Handle refresh button press - returns success status
      */
-    private handleRefresh(): void {
+    private handleRefresh(): boolean {
         if (this.onRefreshCallback) {
             const success = this.onRefreshCallback();
             if (success) {
                 this.refreshShopUI();
+                return true;
             }
-            return;
+            return false;
         }
 
         // Fallback: direct refresh via gameLoop
-        if (!this.gameLoop) return;
+        if (!this.gameLoop) return false;
         const success = this.gameLoop.refreshShop();
         if (success) {
             this.refreshShopUI();
+            return true;
         }
+        return false;
     }
 
     /**
-     * Handle lock button press
+     * Handle lock button press - returns success status
      */
-    private handleLock(slotIndex: number): void {
+    private handleLock(slotIndex: number): boolean {
         if (this.onLockCallback) {
             const success = this.onLockCallback(slotIndex);
             if (success) {
                 this.refreshShopUI();
+                return true;
             }
-            return;
+            return false;
         }
 
         // Fallback: direct lock toggle via shopManager
-        if (!this.shopManager) return;
+        if (!this.shopManager) return false;
         this.shopManager.toggleLock(slotIndex);
         this.refreshShopUI();
+        return true;
     }
 
     // ============= Display Refresh =============

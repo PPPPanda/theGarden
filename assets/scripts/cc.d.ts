@@ -26,6 +26,16 @@ export const property: any;
 // Provide mock constructors for value usage (new Color(), etc.)
 export const Component: new (...args: any[]) => any;
 export const Node: new (...args: any[]) => any;
+
+// Node.EventType for event registration
+export const NodeEventType = {
+    TOUCH_START: 'touchstart',
+    TOUCH_MOVE: 'touchmove',
+    TOUCH_END: 'touchend',
+    MOUSE_DOWN: 'mousedown',
+    MOUSE_MOVE: 'mousemove',
+    MOUSE_UP: 'mouseup',
+};
 export const Color: new (...args: any[]) => any;
 export const UITransform: new (...args: any[]) => any;
 export const Graphics: new (...args: any[]) => any;
