@@ -3,7 +3,7 @@
  * Handles different screen sizes, aspect ratios, and safe areas
  */
 
-import { _decorator, Component, Node, UITransform, view, Screen, Vec2, Vec4 } from 'cc';
+import { _decorator, Component, Node, UITransform, view, Vec2 } from 'cc';
 
 const { ccclass, property } = _decorator;
 
