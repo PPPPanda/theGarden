@@ -382,6 +382,17 @@ export class ShopPanel extends Component {
      * Handle buy button press
      */
     private handleBuy(slotIndex: number): void {
+        // Check if slot is already purchased
+        const slot = this.shopManager?.getSlot(slotIndex);
+        if (!slot) {
+            console.warn('ShopPanel: invalid slot index');
+            return;
+        }
+        if (slot.purchased) {
+            console.warn('ShopPanel: slot already purchased');
+            return;
+        }
+
         if (this.onBuyCallback) {
             const success = this.onBuyCallback(slotIndex);
             if (success) {
@@ -554,12 +565,10 @@ export class ShopPanel extends Component {
             }
         }
 
-        // Update buy button interactivity
+        // Update buy button interactivity - keep listener, visual feedback only
         if (binding.buyBtn) {
-            // Disable touch on purchased slots
-            if (slot.purchased) {
-                binding.buyBtn.off(EventTouch.TOUCH_END);
-            }
+            // Visual feedback handled in icon/price update
+            // Click handler checks purchased state in handleBuy()
         }
 
         // Update slot background color via Sprite on bg node
