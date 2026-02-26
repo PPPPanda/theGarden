@@ -457,21 +457,7 @@ export class MainScene extends Component {
     // ============= Battle Phase =============
 
     /**
-     * Start battle
-     */
-    public startBattle(): void {
-        // Generate AI opponent
-        this.gameLoop.generateAiOpponent();
-        
-        // Start battle
-        this.gameLoop.startBattle();
-        
-        // Update enemy grid view
-        this.enemyGridView.refresh();
-    }
-
-    /**
-     * Run full battle
+     * Run full battle (legacy method)
      */
     public runFullBattle() {
         const result = this.gameLoop.runFullBattle();
@@ -639,14 +625,101 @@ export class MainScene extends Component {
         return this.battlePanel?.isBattleFinished() ?? false;
     }
 
-    // ============= Result Phase =============
+    // ============= Stage-Driven Flow =============
 
     /**
-     * Complete day and advance
+     * Enter Grid stage from Shop (user ready to arrange items)
+     */
+    public enterGrid(): boolean {
+        if (!this.canTransitionTo(SceneStage.Grid)) {
+            console.warn('Cannot transition to Grid from current stage');
+            return false;
+        }
+        
+        const result = this.transitionToStage(SceneStage.Grid);
+        return result.ok;
+    }
+
+    /**
+     * Start battle from Grid (user ready to fight)
+     */
+    public startBattle(): boolean {
+        if (!this.canTransitionTo(SceneStage.Battle)) {
+            console.warn('Cannot transition to Battle from current stage');
+            return false;
+        }
+        
+        // Generate AI opponent
+        this.gameLoop.generateAiOpponent();
+        
+        // Start battle in GameLoop
+        this.gameLoop.startBattle();
+        
+        // Update enemy grid view
+        this.enemyGridView.refresh();
+        
+        // Transition to Battle stage
+        const result = this.transitionToStage(SceneStage.Battle);
+        
+        // Show battle UI
+        if (result.ok) {
+            this.showBattleStartUI();
+        }
+        
+        return result.ok;
+    }
+
+    /**
+     * Finish battle and show results (called when battle ends)
+     */
+    public finishBattle(): boolean {
+        // Battle auto-transitions to Result when finished
+        // This method explicitly triggers the Result stage
+        
+        const current = this.getCurrentStage();
+        if (current !== SceneStage.Battle) {
+            console.warn('Cannot finish battle - not in Battle stage');
+            return false;
+        }
+        
+        const result = this.transitionToStage(SceneStage.Result);
+        
+        // Update views after battle
+        this.playerGridView.refresh();
+        this.enemyGridView.refresh();
+        
+        return result.ok;
+    }
+
+    /**
+     * Continue to next day - Result -> Shop
+     */
+    public continueToNextDay(): boolean {
+        if (!this.canTransitionTo(SceneStage.Shop)) {
+            console.warn('Cannot transition to Shop from current stage');
+            return false;
+        }
+        
+        // Complete current day and start next
+        this.gameLoop.completeDay();
+        
+        // Transition to Shop for next day
+        const result = this.transitionToStage(SceneStage.Shop);
+        
+        // Refresh views
+        this.playerGridView.refresh();
+        this.enemyGridView.refresh();
+        
+        return result.ok;
+    }
+
+    // ============= Legacy Compatibility =============
+
+    /**
+     * Complete day and advance (legacy method)
      */
     public completeDay(): void {
-        this.gameLoop.completeDay();
-        this.playerGridView.refresh();
+        this.continueToNextDay();
     }
 
     // ============= UI Updates =============
