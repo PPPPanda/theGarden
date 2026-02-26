@@ -56,3 +56,11 @@ SOUL.md
 TOOLS.md
 USER.md
 memory/
+# DevClaw workspace artifacts
+devclaw/
+devclaw.bak.*/
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
