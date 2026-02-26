@@ -96,3 +96,13 @@ export interface Vec4Interface {
 }
 export type Vec4 = Vec4Interface;
 export const Vec4: new (...args?: number[]) => Vec4Interface;
+
+// Vec3 - 3D vector (both value and type)
+export interface Vec3Interface {
+    x: number;
+    y: number;
+    z: number;
+    set(x: number, y: number, z: number): Vec3Interface;
+}
+export type Vec3 = Vec3Interface;
+export const Vec3: new (...args?: number[]) => Vec3Interface;
