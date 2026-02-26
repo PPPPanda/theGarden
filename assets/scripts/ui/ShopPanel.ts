@@ -261,21 +261,27 @@ export class ShopPanel extends Component {
      * Wire button events
      */
     private wireEvents(): void {
-        // Slot buy/lock buttons
+        // Slot buy/lock buttons - use string 'touchend' per Cocos 3.x best practices
         for (let i = 0; i < this.slotBindings.length; i++) {
             const binding = this.slotBindings[i];
             const slotIdx = i;
 
             if (binding.buyBtn) {
-                binding.buyBtn.off(EventTouch.TOUCH_END);
-                binding.buyBtn.on(EventTouch.TOUCH_END, () => this.handleBuy(slotIdx), this);
+                binding.buyBtn.off('touchend');
+                binding.buyBtn.on('touchend', () => {
+                    console.log(`[ShopPanel] BUY touched at slot ${slotIdx}`);
+                    this.handleBuy(slotIdx);
+                }, this);
             }
             if (binding.lockBtn) {
-                binding.lockBtn.off(EventTouch.TOUCH_END);
-                binding.lockBtn.on(EventTouch.TOUCH_END, () => this.handleLock(slotIdx), this);
+                binding.lockBtn.off('touchend');
+                binding.lockBtn.on('touchend', () => {
+                    console.log(`[ShopPanel] LOCK touched at slot ${slotIdx}`);
+                    this.handleLock(slotIdx);
+                }, this);
             }
             
-            // Add drag detection on slot icon
+            // Drag detection on slot icon - keep EventTouch for position data
             if (binding.icon) {
                 binding.icon.off(EventTouch.TOUCH_START);
                 binding.icon.off(EventTouch.TOUCH_MOVE);
@@ -315,11 +321,14 @@ export class ShopPanel extends Component {
             }
         }
 
-        // Refresh button
+        // Refresh button - use string 'touchend'
         const refreshNode = this.refreshBtn ?? this.node.getChildByName('refreshBtn');
         if (refreshNode) {
-            refreshNode.off(EventTouch.TOUCH_END);
-            refreshNode.on(EventTouch.TOUCH_END, () => this.handleRefresh(), this);
+            refreshNode.off('touchend');
+            refreshNode.on('touchend', () => {
+                console.log('[ShopPanel] REFRESH touched');
+                this.handleRefresh();
+            }, this);
         }
     }
 
@@ -327,12 +336,21 @@ export class ShopPanel extends Component {
      * Handle drag start from shop slot
      */
     private handleDragStart(slotIndex: number, worldPos: {x: number, y: number}): void {
-        if (!this.onDragStartFromShopCallback) return;
+        console.log(`[ShopPanel] DRAG_START at slot ${slotIndex}, pos: (${worldPos.x}, ${worldPos.y})`);
+        
+        if (!this.onDragStartFromShopCallback) {
+            console.warn(`[ShopPanel] DRAG_START: no callback set for slot ${slotIndex}`);
+            return;
+        }
         
         const slot = this.shopManager?.getSlot(slotIndex);
-        if (!slot || !slot.templateId) return;
+        if (!slot || !slot.templateId) {
+            console.warn(`[ShopPanel] DRAG_START: invalid slot ${slotIndex}`);
+            return;
+        }
         
         const templateId = slot.templateId;
+        console.log(`[ShopPanel] DRAG_START: triggering callback with templateId=${templateId}`);
         this.onDragStartFromShopCallback(slotIndex, templateId, worldPos);
     }
 
