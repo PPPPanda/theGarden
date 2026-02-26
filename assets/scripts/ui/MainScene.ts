@@ -8,7 +8,7 @@ import { GameLoop, GamePhase, getGameLoop } from '../core/GameLoop';
 import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
 import { BattlePanel, BattlePanelState } from './BattlePanel';
-import { ScreenAdapter, Orientation } from './ScreenAdapter';
+import { ScreenAdapter } from './ScreenAdapter';
 import { HUD } from './HUD';
 import { GridPanelComp } from './GridPanelComp';
 import { ShopPanel } from './ShopPanel';

@@ -112,8 +112,12 @@ export class ScreenAdapter extends Component {
         this.updateSafeArea();
         this.updateLayout();
         
-        // Register resize listener
-        view.on('canvas-resize', this.onCanvasResize, this);
+        // Register resize listener — guard in case view.on is not available
+        try {
+            if (typeof view.on === 'function') {
+                view.on('canvas-resize', this.onCanvasResize, this);
+            }
+        } catch (_e) { /* Editor Preview may not support this event */ }
         
         // WeChat mini-game specific
         this.setupWeChatSafeArea();
@@ -123,7 +127,11 @@ export class ScreenAdapter extends Component {
      * Called when component is disabled
      */
     onDisable(): void {
-        view.off('canvas-resize', this.onCanvasResize, this);
+        try {
+            if (typeof view.off === 'function') {
+                view.off('canvas-resize', this.onCanvasResize, this);
+            }
+        } catch (_e) { /* Ignore */ }
     }
 
     /**
@@ -154,17 +162,33 @@ export class ScreenAdapter extends Component {
     }
 
     /**
-     * Update screen size
+     * Update screen size using Cocos 3.8.8-safe APIs.
+     * Avoids deprecated view.getCanvasSize() which logs warnings in Editor Preview.
      */
     private updateScreenSize(): void {
-        // getCanvasSize may not exist in all Cocos 3.x versions; fallback to design resolution
-        if (typeof view.getCanvasSize === 'function') {
-            const canvasSize = view.getCanvasSize();
-            this._screenSize.set(canvasSize.width, canvasSize.height);
-        } else {
-            // Fallback: use design resolution
-            this._screenSize.set(this.referenceWidth, this.referenceHeight);
+        try {
+            const viewAny = view as any;
+            // Prefer getVisibleSize (stable across Cocos 3.x, no deprecation warning)
+            if (typeof viewAny.getVisibleSize === 'function') {
+                const vs = viewAny.getVisibleSize();
+                if (vs && typeof vs.width === 'number') {
+                    this._screenSize.set(vs.width, vs.height);
+                    return;
+                }
+            }
+            // Fallback: getDesignResolutionSize (also stable)
+            if (typeof viewAny.getDesignResolutionSize === 'function') {
+                const ds = viewAny.getDesignResolutionSize();
+                if (ds && typeof ds.width === 'number') {
+                    this._screenSize.set(ds.width, ds.height);
+                    return;
+                }
+            }
+        } catch (_e) {
+            // Silently fall through
         }
+        // Ultimate fallback: reference design resolution
+        this._screenSize.set(this.referenceWidth, this.referenceHeight);
     }
 
     /**
@@ -189,17 +213,23 @@ export class ScreenAdapter extends Component {
     // ============= Safe Area =============
 
     /**
-     * Update safe area from system
+     * Update safe area from system (Cocos 3.8.8-safe)
      */
     public updateSafeArea(): void {
-        // Get safe area — use view.getSafeAreaRect if available, fallback to full screen
-        let safeRect: { x: number; y: number; width: number; height: number };
-        if (typeof (view as any).getSafeAreaRect === 'function') {
-            const r = (view as any).getSafeAreaRect();
-            safeRect = { x: r.x, y: r.y, width: r.width, height: r.height };
-        } else {
-            // No safe area API — treat entire screen as safe
-            safeRect = { x: 0, y: 0, width: this._screenSize.x, height: this._screenSize.y };
+        // Default: full screen is safe
+        let safeRect = { x: 0, y: 0, width: this._screenSize.x, height: this._screenSize.y };
+
+        try {
+            // getSafeAreaRect may not exist or may throw in Editor Preview
+            const viewAny = view as any;
+            if (typeof viewAny.getSafeAreaRect === 'function') {
+                const r = viewAny.getSafeAreaRect();
+                if (r && typeof r.width === 'number') {
+                    safeRect = { x: r.x, y: r.y, width: r.width, height: r.height };
+                }
+            }
+        } catch (_e) {
+            // Silently fall back to full screen
         }
         
         // Convert to our format (in pixels)
