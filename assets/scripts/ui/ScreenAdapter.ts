@@ -157,8 +157,14 @@ export class ScreenAdapter extends Component {
      * Update screen size
      */
     private updateScreenSize(): void {
-        const canvasSize = view.getCanvasSize();
-        this._screenSize.set(canvasSize.width, canvasSize.height);
+        // getCanvasSize may not exist in all Cocos 3.x versions; fallback to design resolution
+        if (typeof view.getCanvasSize === 'function') {
+            const canvasSize = view.getCanvasSize();
+            this._screenSize.set(canvasSize.width, canvasSize.height);
+        } else {
+            // Fallback: use design resolution
+            this._screenSize.set(this.referenceWidth, this.referenceHeight);
+        }
     }
 
     /**
@@ -186,15 +192,22 @@ export class ScreenAdapter extends Component {
      * Update safe area from system
      */
     public updateSafeArea(): void {
-        // Get safe area from Cocos view
-        const safeArea = view.getSafeAreaRect();
+        // Get safe area — use view.getSafeAreaRect if available, fallback to full screen
+        let safeRect: { x: number; y: number; width: number; height: number };
+        if (typeof (view as any).getSafeAreaRect === 'function') {
+            const r = (view as any).getSafeAreaRect();
+            safeRect = { x: r.x, y: r.y, width: r.width, height: r.height };
+        } else {
+            // No safe area API — treat entire screen as safe
+            safeRect = { x: 0, y: 0, width: this._screenSize.x, height: this._screenSize.y };
+        }
         
         // Convert to our format (in pixels)
         this._safeArea = {
-            top: safeArea.y,
-            bottom: this._screenSize.y - safeArea.y - safeArea.height,
-            left: safeArea.x,
-            right: this._screenSize.x - safeArea.x - safeArea.width
+            top: safeRect.y,
+            bottom: this._screenSize.y - safeRect.y - safeRect.height,
+            left: safeRect.x,
+            right: this._screenSize.x - safeRect.x - safeRect.width
         };
 
         // Apply minimum padding
