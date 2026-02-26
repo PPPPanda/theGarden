@@ -47,11 +47,8 @@ export class MainScene extends Component {
         this.playerGridView.init();
         this.enemyGridView.init();
         
-        // Initialize all panels with gameLoop
+        // Initialize all panels with gameLoop (includes battlePanel)
         this.initAllPanels();
-        
-        // Initialize battle panel
-        this.initBattlePanel();
         
         // Initialize screen adapter
         this.initScreenAdapter();
@@ -77,17 +74,31 @@ export class MainScene extends Component {
         if (this.shopPanel) {
             this.shopPanel.init(this.gameLoop);
             
-            // Bind shop callbacks
+            // Bind shop callbacks - buy/refresh/lock all trigger unified refresh
             this.shopPanel.setOnBuy((slotIndex: number) => {
-                // Buy is handled via drag to grid - this is for direct buy if needed
-                return false;
+                // For direct buy (without grid placement), place at first empty cell
+                const grid = this.gameLoop.getPlayerGrid();
+                let placed = false;
+                for (let r = 0; r < grid.rows && !placed; r++) {
+                    for (let c = 0; c < grid.cols && !placed; c++) {
+                        if (!grid.getItemAt({ row: r, col: c })) {
+                            const success = this.gameLoop.purchaseFromShop(slotIndex, { row: r, col: c });
+                            if (success) {
+                                placed = true;
+                            }
+                        }
+                    }
+                }
+                if (placed) {
+                    this.refreshAllViews();
+                }
+                return placed;
             });
             
             this.shopPanel.setOnRefresh(() => {
                 const success = this.gameLoop.refreshShop();
                 if (success) {
-                    this.shopPanel?.refreshShopUI();
-                    this.updateGoldDisplay();
+                    this.refreshAllViews();
                 }
                 return success;
             });
@@ -95,7 +106,7 @@ export class MainScene extends Component {
             this.shopPanel.setOnLock((slotIndex: number) => {
                 const success = this.gameLoop.getShopManager().toggleLock(slotIndex);
                 if (success) {
-                    this.shopPanel?.refreshShopUI();
+                    this.refreshAllViews();
                 }
                 return success;
             });
@@ -113,17 +124,25 @@ export class MainScene extends Component {
             this.gridPanel.setOnShopItemDrop((templateId: string, slotIndex: number, position) => {
                 const success = this.gameLoop.purchaseFromShop(slotIndex, position);
                 if (success) {
-                    this.gridPanel?.refreshGrid();
-                    this.updateGoldDisplay();
+                    this.refreshAllViews();
                 }
                 return success;
             });
         }
         
-        // Initialize BattlePanel
+        // Initialize BattlePanel (moved from start())
         if (this.battlePanel) {
             this.battlePanel.init(this.gameLoop);
         }
+    }
+
+    /**
+     * Refresh all views after any successful operation
+     */
+    private refreshAllViews(): void {
+        this.shopPanel?.refreshShopUI();
+        this.gridPanel?.refreshGrid();
+        this.updateGoldDisplay();
     }
 
     /**
