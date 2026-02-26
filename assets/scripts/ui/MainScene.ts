@@ -836,12 +836,4 @@ export class MainScene extends Component {
         this.enemyGridView.refresh();
     }
 
-    /**
-     * Destroy scene
-     */
-    public destroy(): void {
-        this.playerGridView.destroy();
-        this.enemyGridView.destroy();
-        this.isInitialized = false;
     }
-}

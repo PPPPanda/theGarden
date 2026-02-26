@@ -54,7 +54,7 @@ const REFERENCE_RATIO = REFERENCE_WIDTH / REFERENCE_HEIGHT;
 export class ScreenAdapter extends Component {
     // ============= Properties =============
 
-    @property({ type: Orientation, tooltip: 'Target orientation' })
+    @property({ tooltip: 'Target orientation (portrait / landscape / auto)' })
     public targetOrientation: Orientation = Orientation.Portrait;
 
     @property({ type: Number, tooltip: 'Reference design width' })
