@@ -69,6 +69,11 @@ export class GridPanelComp extends Component {
     /** Dragged item node (visual feedback) */
     private dragPreviewNode: Node | null = null;
 
+    /** Grid internal drag state */
+    private isDraggingInGrid: boolean = false;
+    private draggingItemId: string | null = null;
+    private dragStartCell: { row: number; col: number } | null = null;
+
     /** Valid drop target color */
     @property({ type: Color, tooltip: 'Valid drop target color' })
     public validDropColor: Color = new Color(144, 238, 144, 150); // light green
@@ -289,6 +294,174 @@ export class GridPanelComp extends Component {
     public onLoad(): void {
         if (!this.gridManager && !this.gridView) {
             this.createCells();
+        }
+        // Setup global touch listeners on container for cross-component drag
+        this.setupGlobalTouchListeners();
+    }
+
+    /**
+     * Setup global touch listeners for drag operations
+     */
+    private setupGlobalTouchListeners(): void {
+        const targetNode = this.container ?? this.node;
+        
+        // Use a transparent overlay node to capture all touch events
+        if (!targetNode.getChildByName('touchOverlay')) {
+            const overlay = new Node('touchOverlay');
+            const transform = overlay.addComponent(UITransform);
+            const containerTransform = targetNode.getComponent(UITransform);
+            if (containerTransform) {
+                transform.setContentSize(containerTransform.width, containerTransform.height);
+            } else {
+                transform.setContentSize(this.cols * (this.actualCellSize + this.cellGap), this.rows * (this.actualCellSize + this.cellGap));
+            }
+            overlay.setPosition(transform.width / 2, -transform.height / 2, 0);
+            targetNode.addChild(overlay);
+            
+            // Listen to all touch events on the overlay
+            overlay.on(EventTouch.TOUCH_START, (event: EventTouch) => this.onGlobalTouchStart(event), this);
+            overlay.on(EventTouch.TOUCH_MOVE, (event: EventTouch) => this.onGlobalTouchMove(event), this);
+            overlay.on(EventTouch.TOUCH_END, (event: EventTouch) => this.onGlobalTouchEnd(event), this);
+        }
+    }
+
+    /**
+     * Handle global touch start
+     */
+    private onGlobalTouchStart(event: EventTouch): void {
+        const touchPos = event.getUILocation();
+        const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
+        
+        if (localPos && this.gridManager) {
+            const itemId = this.gridManager.getItemAt(localPos);
+            if (itemId) {
+                // Start grid internal drag
+                this.isDraggingInGrid = true;
+                this.draggingItemId = itemId;
+                this.dragStartCell = localPos;
+                this.createDragPreviewFromGrid(itemId, localPos);
+                event.propagationStopped = true;
+            }
+        }
+    }
+
+    /**
+     * Handle global touch move
+     */
+    private onGlobalTouchMove(event: EventTouch): void {
+        const touchPos = event.getUILocation();
+        const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
+
+        // Update drag preview position
+        this.updateDragPreview(new Vec3(touchPos.x, touchPos.y, 0));
+
+        if (this.isDraggingFromShop) {
+            // Shop item drag feedback
+            if (localPos) {
+                const itemAtPos = this.gridManager?.getItemAt(localPos);
+                this.setHoverEffect(localPos.row, localPos.col, !itemAtPos);
+            } else {
+                this.clearHoverEffect();
+            }
+            event.propagationStopped = true;
+        } else if (this.isDraggingInGrid && localPos) {
+            // Grid internal drag feedback
+            const itemAtPos = this.gridManager?.getItemAt(localPos);
+            this.setHoverEffect(localPos.row, localPos.col, !itemAtPos || (localPos.row === this.dragStartCell?.row && localPos.col === this.dragStartCell?.col));
+            event.propagationStopped = true;
+        }
+    }
+
+    /**
+     * Handle global touch end
+     */
+    private onGlobalTouchEnd(event: EventTouch): void {
+        const touchPos = event.getUILocation();
+        const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
+
+        if (this.isDraggingFromShop) {
+            // Handle shop item drop
+            if (localPos) {
+                const itemAtPos = this.gridManager?.getItemAt(localPos);
+                if (!itemAtPos) {
+                    this.endDrag(localPos);
+                } else {
+                    this.cancelDrag();
+                }
+            } else {
+                this.cancelDrag();
+            }
+            event.propagationStopped = true;
+        } else if (this.isDraggingInGrid) {
+            // Handle grid internal move
+            if (localPos && this.draggingItemId && this.dragStartCell) {
+                // Don't move to same cell
+                if (localPos.row !== this.dragStartCell.row || localPos.col !== this.dragStartCell.col) {
+                    const itemAtPos = this.gridManager?.getItemAt(localPos);
+                    if (!itemAtPos && this.gameLoop) {
+                        // Empty cell - move item
+                        const success = this.gameLoop.moveItem(this.draggingItemId, localPos);
+                        if (success) {
+                            this.refreshGrid();
+                        }
+                    }
+                }
+            }
+            this.endGridDrag();
+            event.propagationStopped = true;
+        }
+    }
+
+    /**
+     * Create drag preview from grid item
+     */
+    private createDragPreviewFromGrid(itemId: string, _startCell: { row: number; col: number }): void {
+        if (this.dragPreviewNode) {
+            this.dragPreviewNode.destroy();
+        }
+
+        const item = this.gridManager?.itemsMap?.get(itemId);
+        if (!item) return;
+
+        const template = this.itemDB?.getTemplate(item.templateId);
+        
+        this.dragPreviewNode = new Node('dragPreview');
+        const transform = this.dragPreviewNode.addComponent(UITransform);
+        transform.setContentSize(this.actualCellSize, this.actualCellSize);
+        
+        const sprite = this.dragPreviewNode.addComponent(Sprite);
+        if (template?.color) {
+            sprite.color = this.parseHexColor(template.color);
+        } else {
+            sprite.color = this.occupiedColor;
+        }
+
+        const labelNode = new Node('label');
+        const labelTransform = labelNode.addComponent(UITransform);
+        labelTransform.setContentSize(this.actualCellSize * 0.8, this.actualCellSize * 0.8);
+        labelNode.setPosition(0, 0, 0);
+        this.dragPreviewNode.addChild(labelNode);
+
+        const label = labelNode.addComponent(Label);
+        label.fontSize = Math.floor(this.actualCellSize * 0.6);
+        label.horizontalAlign = Label.HorizontalAlign.CENTER;
+        label.verticalAlign = Label.VerticalAlign.CENTER;
+        label.string = template?.emoji ?? '?';
+
+        this.node.addChild(this.dragPreviewNode);
+    }
+
+    /**
+     * End grid internal drag
+     */
+    private endGridDrag(): void {
+        this.isDraggingInGrid = false;
+        this.draggingItemId = null;
+        this.dragStartCell = null;
+        this.clearHoverEffect();
+        if (this.dragPreviewNode) {
+            this.dragPreviewNode.destroy();
+            this.dragPreviewNode = null;
         }
     }
 
