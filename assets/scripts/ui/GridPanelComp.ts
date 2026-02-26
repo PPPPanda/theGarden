@@ -49,6 +49,7 @@ export class GridPanelComp extends Component {
     private gameLoop: GameLoop | null = null;
     private gridView: GridView | null = null;
     private cellNodes: Map<string, Node> = new Map();
+    private cellPool: Node[] = [];  // Node pool for reuse
     private selectedItemId: string | null = null;
     private actualCellSize: number = 50;
     private rows: number = 10;
@@ -92,7 +93,7 @@ export class GridPanelComp extends Component {
     // ============= Cell Creation =============
 
     /**
-     * Create grid cells using Sprite nodes
+     * Create grid cells using Sprite nodes with node pool
      */
     private createCells(): void {
         const targetContainer = this.container ?? this.node;
@@ -109,18 +110,55 @@ export class GridPanelComp extends Component {
             ));
         }
 
-        // Clear existing cells
-        this.cellNodes.forEach(node => node.destroy());
-        this.cellNodes.clear();
-
-        // Create cells
+        // First, hide all existing cells
+        this.cellNodes.forEach((node) => {
+            node.active = false;
+        });
+        
+        // Reuse or create cells
         for (let row = 0; row < this.rows; row++) {
             for (let col = 0; col < this.cols; col++) {
-                const cellNode = this.createCellNode(row, col);
-                targetContainer.addChild(cellNode);
-                this.cellNodes.set(`${row},${col}`, cellNode);
+                const key = `${row},${col}`;
+                let cellNode: Node | undefined = this.cellNodes.get(key);
+                
+                if (!cellNode) {
+                    // Try to get from pool
+                    if (this.cellPool.length > 0) {
+                        cellNode = this.cellPool.pop()!;
+                        this.updateCellPosition(cellNode, row, col);
+                    } else {
+                        // Create new if pool empty
+                        cellNode = this.createCellNode(row, col);
+                    }
+                    targetContainer.addChild(cellNode);
+                    this.cellNodes.set(key, cellNode);
+                }
+                
+                // Reactivate and update position
+                cellNode.active = true;
+                this.updateCellPosition(cellNode, row, col);
             }
         }
+        
+        // Recycle excess nodes to pool
+        this.cellNodes.forEach((node, key) => {
+            const [r, c] = key.split(',').map(Number);
+            if (r >= this.rows || c >= this.cols) {
+                node.active = false;
+                this.cellPool.push(node);
+                this.cellNodes.delete(key);
+            }
+        });
+    }
+
+    /**
+     * Update cell position
+     */
+    private updateCellPosition(cellNode: Node, row: number, col: number): void {
+        const visualRow = (this.rows - 1) - row;
+        const x = this.cellGap + col * (this.actualCellSize + this.cellGap);
+        const y = this.cellGap + visualRow * (this.actualCellSize + this.cellGap);
+        cellNode.setPosition(x, -y, 0);
     }
 
     /**
@@ -339,6 +377,8 @@ export class GridPanelComp extends Component {
     public onDestroy(): void {
         this.cellNodes.forEach(node => node.destroy());
         this.cellNodes.clear();
+        this.cellPool.forEach(node => node.destroy());
+        this.cellPool = [];
     }
 
     // ============= GridView Compatibility =============
