@@ -1,14 +1,16 @@
 /**
  * GridPanelComp - Grid Panel Cocos Component
- * Renders 10x10 grid using Sprite nodes with proper typing
+ * Renders 10x10 grid using Sprite nodes with proper typing.
+ * All drag logic is delegated to GridDragController.
  */
 
-import { _decorator, Component, Node, Sprite, Label, Color, UITransform, EventTouch, Vec3, input } from 'cc';
+import { _decorator, Component, Node, Sprite, Label, Color, UITransform, Vec3, input } from 'cc';
 import { GridManager } from '../core/GridManager';
 import { ItemDB } from '../core/ItemDB';
 import { GameLoop } from '../core/GameLoop';
 import { GridView } from './GridView';
-import { IGridItem, IItemTemplate, IGridPosition } from '../core/types';
+import { IGridItem, IGridPosition } from '../core/types';
+import { GridDragController, DragType } from './drag/GridDragController';
 
 const { ccclass, property } = _decorator;
 
@@ -31,16 +33,22 @@ export class GridPanelComp extends Component {
     // ============= Color Properties =============
 
     @property({ type: Color, tooltip: 'Empty cell background color' })
-    public emptyColor: Color = new Color(232, 245, 233, 255); // #E8F5E9
+    public emptyColor: Color = new Color(232, 245, 233, 255);
 
     @property({ type: Color, tooltip: 'Occupied cell background color' })
-    public occupiedColor: Color = new Color(200, 230, 201, 255); // #C8E6C9
+    public occupiedColor: Color = new Color(200, 230, 201, 255);
 
     @property({ type: Color, tooltip: 'Selected border color' })
-    public selectedBorderColor: Color = new Color(255, 193, 7, 255); // #FFC107
+    public selectedBorderColor: Color = new Color(255, 193, 7, 255);
 
     @property({ type: Number, tooltip: 'Selected border width' })
     public selectedBorderWidth: number = 3;
+
+    @property({ type: Color, tooltip: 'Valid drop target color' })
+    public validDropColor: Color = new Color(144, 238, 144, 150);
+
+    @property({ type: Color, tooltip: 'Invalid drop target color' })
+    public invalidDropColor: Color = new Color(255, 182, 193, 150);
 
     // ============= Private Fields =============
 
@@ -49,233 +57,39 @@ export class GridPanelComp extends Component {
     private gameLoop: GameLoop | null = null;
     private gridView: GridView | null = null;
     private cellNodes: Map<string, Node> = new Map();
-    private cellPool: Node[] = [];  // Node pool for reuse
+    private cellPool: Node[] = [];
     private selectedItemId: string | null = null;
     private actualCellSize: number = 50;
     private rows: number = 10;
     private cols: number = 10;
-
-    // ============= Drag State =============
-
-    /** Whether currently dragging from shop */
-    private isDraggingFromShop: boolean = false;
-
-    /** Shop item being dragged (templateId, slotIndex) */
-    private draggedShopItem: { templateId: string; slotIndex: number } | null = null;
-
-    /** Currently hovered cell for drop feedback */
-    private hoveredCell: { row: number; col: number } | null = null;
-
-    /** Dragged item node (visual feedback) */
-    private dragPreviewNode: Node | null = null;
-
-    /** Grid internal drag state */
-    private isDraggingInGrid: boolean = false;
-    private draggingItemId: string | null = null;
-    private dragStartCell: { row: number; col: number } | null = null;
-
-    /** Valid drop target color */
-    @property({ type: Color, tooltip: 'Valid drop target color' })
-    public validDropColor: Color = new Color(144, 238, 144, 150); // light green
-
-    /** Invalid drop target color */
-    @property({ type: Color, tooltip: 'Invalid drop target color' })
-    public invalidDropColor: Color = new Color(255, 182, 193, 150); // light pink
+    private dragController: GridDragController | null = null;
 
     // ============= Callbacks =============
 
-    /** Callback for shop item drop on grid */
     private onShopItemDropCallback: ((templateId: string, slotIndex: number, position: IGridPosition) => boolean) | null = null;
 
-    /**
-     * Set callback for shop item being dropped on grid
-     */
     public setOnShopItemDrop(callback: (templateId: string, slotIndex: number, position: IGridPosition) => boolean): void {
         this.onShopItemDropCallback = callback;
     }
 
-    /**
-     * Start dragging from shop
-     */
+    // ============= Public Drag API =============
+
+    /** Called by ShopPanel to initiate a shop→grid drag */
     public startDragFromShop(templateId: string, slotIndex: number, touchPos: Vec3): void {
-        this.isDraggingFromShop = true;
-        this.draggedShopItem = { templateId, slotIndex };
-        this.createDragPreview(templateId, touchPos);
+        this.dragController?.startDragFromShop(templateId, slotIndex, touchPos);
     }
 
-    /**
-     * Create drag preview node
-     */
-    private createDragPreview(templateId: string, touchPos: Vec3): void {
-        if (this.dragPreviewNode) {
-            this.dragPreviewNode.destroy();
-        }
-
-        // Create preview node
-        this.dragPreviewNode = new Node('dragPreview');
-        const transform = this.dragPreviewNode.addComponent(UITransform);
-        transform.setContentSize(this.actualCellSize, this.actualCellSize);
-        this.dragPreviewNode.setPosition(touchPos);
-
-        // Add sprite
-        const sprite = this.dragPreviewNode.addComponent(Sprite);
-        const template = this.itemDB?.getTemplate(templateId);
-        if (template?.color) {
-            sprite.color = this.parseHexColor(template.color);
-        } else {
-            sprite.color = this.occupiedColor;
-        }
-
-        // Add emoji label
-        const labelNode = new Node('label');
-        const labelTransform = labelNode.addComponent(UITransform);
-        labelTransform.setContentSize(this.actualCellSize * 0.8, this.actualCellSize * 0.8);
-        labelNode.setPosition(0, 0, 0);
-        this.dragPreviewNode.addChild(labelNode);
-
-        const label = labelNode.addComponent(Label);
-        label.fontSize = Math.floor(this.actualCellSize * 0.6);
-        label.horizontalAlign = Label.HorizontalAlign.CENTER;
-        label.verticalAlign = Label.VerticalAlign.CENTER;
-        label.string = template?.emoji ?? '?';
-
-        // Add to this node's parent (above everything)
-        this.node.addChild(this.dragPreviewNode);
-    }
-
-    /**
-     * Update drag preview position
-     */
-    private updateDragPreview(touchPos: Vec3): void {
-        if (this.dragPreviewNode) {
-            this.dragPreviewNode.setPosition(touchPos);
-        }
-    }
-
-    /**
-     * End drag operation
-     */
-    public endDrag(dropPosition: IGridPosition | null): void {
-        if (!this.isDraggingFromShop || !this.draggedShopItem) {
-            this.cancelDrag();
-            return;
-        }
-
-        // Try to place item (only if not already occupied)
-        if (dropPosition) {
-            const itemAtPos = this.gridManager?.getItemAt(dropPosition);
-            if (itemAtPos) {
-                // Cell occupied - cannot drop
-                this.cancelDrag();
-                return;
-            }
-
-            if (this.onShopItemDropCallback) {
-                const success = this.onShopItemDropCallback(
-                    this.draggedShopItem.templateId,
-                    this.draggedShopItem.slotIndex,
-                    dropPosition
-                );
-                if (success) {
-                    this.refreshGrid();
-                }
-            }
-        }
-
-        this.cancelDrag();
-    }
-
-    /**
-     * Cancel drag operation
-     */
-    private cancelDrag(): void {
-        this.isDraggingFromShop = false;
-        this.draggedShopItem = null;
-        this.clearHoverEffect();
-        if (this.dragPreviewNode) {
-            this.dragPreviewNode.destroy();
-            this.dragPreviewNode = null;
-        }
-    }
-
-    /**
-     * Get cell position from world/touch position
-     */
+    /** Get cell position from world/touch position */
     public getCellFromPosition(worldPos: Vec3): IGridPosition | null {
-        const containerTransform = this.container?.getComponent(UITransform) ?? this.node.getComponent(UITransform);
-        if (!containerTransform) return null;
-
-        // Use convertToNodeSpaceAR for proper coordinate conversion
         const containerNode = this.container ?? this.node;
-        const localPos = containerNode.getComponent(UITransform)?.convertToNodeSpaceAR(worldPos);
-        if (!localPos) return null;
-
-        const x = localPos.x;
-        const y = localPos.y;
-        const step = this.actualCellSize + this.cellGap;
-
-        // Cells are positioned with negative Y, so we need to flip the sign
-        // Y=0 is top of grid, Y<0 is grid area
-        const effectiveY = y < 0 ? -y : y;
-
-        // Calculate cell coordinates
-        const col = Math.floor(x / step);
-        const rowFromTop = Math.floor(effectiveY / step);
-        const row = (this.rows - 1) - rowFromTop;
-
-        // Check bounds
-        if (row >= 0 && row < this.rows && col >= 0 && col < this.cols) {
-            return { row, col };
+        if (this.dragController) {
+            return this.dragController.getCellFromPosition(worldPos, containerNode);
         }
-        return null;
-    }
-
-    /**
-     * Set hover effect on cell
-     */
-    private setHoverEffect(row: number, col: number, isValid: boolean): void {
-        this.clearHoverEffect();
-
-        const key = `${row},${col}`;
-        const cellNode = this.cellNodes.get(key);
-        if (!cellNode) return;
-
-        this.hoveredCell = { row, col };
-        const sprite = cellNode.getComponent(Sprite);
-        if (sprite) {
-            sprite.color = isValid ? this.validDropColor : this.invalidDropColor;
-        }
-    }
-
-    /**
-     * Clear hover effect
-     */
-    private clearHoverEffect(): void {
-        if (this.hoveredCell) {
-            const key = `${this.hoveredCell.row},${this.hoveredCell.col}`;
-            const cellNode = this.cellNodes.get(key);
-            if (cellNode) {
-                // Reset to appropriate color based on item presence
-                const pos = { row: this.hoveredCell.row, col: this.hoveredCell.col };
-                const itemId = this.gridManager?.getItemAt(pos);
-                if (itemId && this.gridManager?.itemsMap) {
-                    const item = this.gridManager.itemsMap.get(itemId);
-                    if (item) {
-                        this.setCellOccupied(cellNode, item);
-                    }
-                } else {
-                    this.setCellEmpty(cellNode);
-                }
-            }
-            this.hoveredCell = null;
-        }
+        return this.getCellFromPositionLocal(worldPos);
     }
 
     // ============= Initialization =============
 
-    /**
-     * Initialize with dependencies
-     */
     public init(gridManager: GridManager, itemDB: ItemDB, gameLoop: GameLoop): void {
         this.gridManager = gridManager;
         this.itemDB = itemDB;
@@ -283,604 +97,178 @@ export class GridPanelComp extends Component {
         this.rows = gridManager.rows;
         this.cols = gridManager.cols;
         this.createCells();
+        this.initDragController();
     }
 
-    /**
-     * Initialize with GridView (for compatibility)
-     */
     public initWithGridView(gridView: GridView): void {
         this.gridView = gridView;
         this.gridManager = gridView.getGridManager();
-        // Get itemDB from gameLoop if available
         this.rows = this.gridManager?.rows ?? 10;
         this.cols = this.gridManager?.cols ?? 10;
         this.createCells();
+        this.initDragController();
     }
 
-    /**
-     * onLoad lifecycle
-     */
     public onLoad(): void {
         if (!this.gridManager && !this.gridView) {
             this.createCells();
         }
-        // Setup global touch listeners on container for cross-component drag
-        this.setupGlobalTouchListeners();
     }
 
-    /**
-     * Setup global touch listeners for drag operations
-     */
-    private setupGlobalTouchListeners(): void {
-        // Use global input system for reliable cross-component drag
-        // This ensures we capture MOVE/END even when touch starts outside grid (e.g., from ShopPanel)
-        
-        // Register on global input system - this works across all nodes
+    private initDragController(): void {
+        this.dragController = new GridDragController(
+            this.actualCellSize, this.cellGap, this.rows, this.cols,
+            this.validDropColor, this.invalidDropColor, this.occupiedColor
+        );
+
+        this.dragController.setGetItemAtPosition((pos: IGridPosition) => {
+            return this.gridManager?.getItemAt(pos) ?? null;
+        });
+
+        this.dragController.setGetItemTemplate((itemId: string) => {
+            // itemId may be a templateId (from shop) or actual itemId (from grid)
+            const template = this.itemDB?.getTemplate(itemId);
+            if (template) return template;
+            // Lookup by itemId → get templateId from item
+            const item = this.gridManager?.itemsMap?.get(itemId);
+            if (item) return this.itemDB?.getTemplate(item.templateId) ?? null;
+            return null;
+        });
+
+        this.dragController.setHoverCallbacks(
+            (row, col, isValid) => this.setHoverEffect(row, col, isValid),
+            () => this.clearHoverEffect()
+        );
+
+        this.dragController.setDropCallback((type, itemId, templateId, slotIndex, position) => {
+            if (type === DragType.FromShop && templateId && slotIndex !== null) {
+                const itemAtPos = this.gridManager?.getItemAt(position);
+                if (itemAtPos) return false;
+                if (this.onShopItemDropCallback) {
+                    const success = this.onShopItemDropCallback(templateId, slotIndex, position);
+                    if (success) this.refreshGrid();
+                    return success;
+                }
+                return false;
+            }
+            if (type === DragType.InGrid && itemId && this.gameLoop) {
+                const itemAtPos = this.gridManager?.getItemAt(position);
+                if (itemAtPos) return false;
+                const success = this.gameLoop.moveItem(itemId, position);
+                if (success) this.refreshGrid();
+                return success;
+            }
+            return false;
+        });
+
+        // Register global touch listeners for drag
+        this.setupTouchListeners();
+    }
+
+    private setupTouchListeners(): void {
         if (input) {
-            input.on('touchstart', this.onGlobalTouchStart, this);
-            input.on('touchmove', this.onGlobalTouchMove, this);
-            input.on('touchend', this.onGlobalTouchEnd, this);
-        } else {
-            // Fallback to node-level capture phase
-            const targetNode = this.container ?? this.node;
-            
-            // Ensure touchOverlay exists for capturing
-            if (!targetNode.getChildByName('touchOverlay')) {
-                const overlay = new Node('touchOverlay');
-                const transform = overlay.addComponent(UITransform);
-                const containerTransform = targetNode.getComponent(UITransform);
-                if (containerTransform) {
-                    transform.setContentSize(containerTransform.width, containerTransform.height);
-                } else {
-                    transform.setContentSize(this.cols * (this.actualCellSize + this.cellGap), this.rows * (this.actualCellSize + this.cellGap));
-                }
-                overlay.setPosition(transform.width / 2, -transform.height / 2, 0);
-                targetNode.addChild(overlay);
-            }
-            
-            // Register capture phase listeners on this node
-            this.node.on(EventTouch.TOUCH_START, this.onTouchStartCapture, this, true);
-            this.node.on(EventTouch.TOUCH_MOVE, this.onTouchMoveCapture, this, true);
-            this.node.on(EventTouch.TOUCH_END, this.onTouchEndCapture, this, true);
+            input.on('touchstart', this.onTouchStart, this);
+            input.on('touchmove', this.onTouchMove, this);
+            input.on('touchend', this.onTouchEnd, this);
         }
     }
 
-    /**
-     * Global touch start - for cross-component drag
-     */
-    private onGlobalTouchStart(event?: EventTouch): void {
-        if (!event) return;
-        
-        const touch = event.touch;
-        if (!touch) return;
-        
-        const touchPos = touch.getLocation();
-        this.touchStartPos = new Vec3(touchPos.x, touchPos.y, 0);
-        this.isDragGesture = false;
-        
-        // Check if starting on an item - prepare for potential drag
-        const localPos = this.getCellFromPosition(this.touchStartPos);
-        if (localPos && this.gridManager) {
-            const itemId = this.gridManager.getItemAt(localPos);
-            if (itemId) {
-                this.dragStartCell = localPos;
-            }
+    private removeTouchListeners(): void {
+        if (input) {
+            input.off('touchstart', this.onTouchStart, this);
+            input.off('touchmove', this.onTouchMove, this);
+            input.off('touchend', this.onTouchEnd, this);
         }
     }
 
-    /**
-     * Global touch move - for cross-component drag
-     */
-    private onGlobalTouchMove(event?: EventTouch): void {
-        if (!event) return;
-        
-        const touch = event.touch;
-        if (!touch) return;
-        
-        const touchPos = touch.getLocation();
-        const currentPos = new Vec3(touchPos.x, touchPos.y, 0);
-        
-        // Check if we've moved enough to consider this a drag
-        if (this.touchStartPos && !this.isDragGesture) {
-            const dx = currentPos.x - this.touchStartPos.x;
-            const dy = currentPos.y - this.touchStartPos.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance > this.DRAG_THRESHOLD) {
-                this.isDragGesture = true;
-                this.startGridDragIfValid();
-            }
-        }
-        
-        // Update drag feedback if active
-        if (this.isDragGesture || this.isDraggingFromShop) {
-            this.updateDragPreview(currentPos);
-            
-            const localPos = this.getCellFromPosition(currentPos);
-            if (this.isDraggingFromShop && localPos) {
-                const itemAtPos = this.gridManager?.getItemAt(localPos);
-                this.setHoverEffect(localPos.row, localPos.col, !itemAtPos);
-            } else if (this.isDraggingInGrid && localPos) {
-                const itemAtPos = this.gridManager?.getItemAt(localPos);
-                const isSameCell = localPos.row === this.dragStartCell?.row && localPos.col === this.dragStartCell?.col;
-                this.setHoverEffect(localPos.row, localPos.col, !itemAtPos || isSameCell);
-            }
-        }
-    }
+    // ============= Touch Handlers (delegate to controller) =============
 
-    /**
-     * Global touch end - for cross-component drag
-     */
-    private onGlobalTouchEnd(event?: EventTouch): void {
-        if (!event) return;
-        
-        const touch = event.touch;
-        if (!touch) return;
-        
-        const touchPos = touch.getLocation();
-        
-        // PRIORITY 1: Shop drag drop - check this FIRST to avoid isDragGesture conflict
-        if (this.isDraggingFromShop) {
-            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
-            if (localPos) {
-                const itemAtPos = this.gridManager?.getItemAt(localPos);
-                if (!itemAtPos) {
-                    this.endDrag(localPos);
-                } else {
-                    this.cancelDrag();
-                }
-            } else {
-                this.cancelDrag();
-            }
-            this.resetAllDragState();
-            return;
-        }
-        
-        // PRIORITY 2: Grid internal drag move
-        if (this.isDraggingInGrid || this.isDragGesture) {
-            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
-            if (localPos && this.draggingItemId && this.dragStartCell) {
-                if (localPos.row !== this.dragStartCell.row || localPos.col !== this.dragStartCell.col) {
-                    const itemAtPos = this.gridManager?.getItemAt(localPos);
-                    if (!itemAtPos && this.gameLoop) {
-                        const success = this.gameLoop.moveItem(this.draggingItemId, localPos);
-                        if (success) {
-                            this.refreshGrid();
-                        }
-                    }
-                }
-            }
-            this.endGridDrag();
-            this.resetAllDragState();
-            return;
-        }
-        
-        // PRIORITY 3: Tap (not a drag)
-        if (this.dragStartCell) {
-            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
-            if (localPos) {
-                this.onCellTouch(localPos.row, localPos.col);
-            }
-        }
-        
-        // Reset all state
-        this.resetAllDragState();
-    }
-
-    /**
-     * Reset all drag-related state
-     */
-    private resetAllDragState(): void {
-        this.touchStartPos = null;
-        this.isDragGesture = false;
-        this.dragStartCell = null;
-        this.isDraggingFromShop = false;
-        this.draggedShopItem = null;
-        this.isDraggingInGrid = false;
-        this.draggingItemId = null;
-        this.clearHoverEffect();
-    }
-
-    /**
-     * Touch start capture phase - detect drag vs tap
-     */
     private touchStartPos: Vec3 | null = null;
-    private isDragGesture: boolean = false;
-    private DRAG_THRESHOLD: number = 10; // pixels to consider as drag
+    private touchStartCell: IGridPosition | null = null;
 
-    private onTouchStartCapture(event: EventTouch): void {
-        const touchPos = event.getUILocation();
-        this.touchStartPos = new Vec3(touchPos.x, touchPos.y, 0);
-        this.isDragGesture = false;
-        
-        // Check if starting on an item - prepare for potential drag
-        const localPos = this.getCellFromPosition(this.touchStartPos);
-        if (localPos && this.gridManager) {
-            const itemId = this.gridManager.getItemAt(localPos);
+    private onTouchStart(event: any): void {
+        if (!event) return;
+        const touch = event.touch;
+        if (!touch) return;
+        const loc = touch.getLocation();
+        const pos = new Vec3(loc.x, loc.y, 0);
+        this.touchStartPos = pos;
+        this.touchStartCell = this.getCellFromPosition(pos);
+
+        // If touch is on a grid item, record for potential drag
+        if (this.touchStartCell && this.gridManager) {
+            const itemId = this.gridManager.getItemAt(this.touchStartCell);
             if (itemId) {
-                // Store potential drag start cell
-                this.dragStartCell = localPos;
+                // Potential grid drag — controller will start on threshold
             }
         }
     }
 
-    /**
-     * Touch move capture phase - handle drag
-     */
-    private onTouchMoveCapture(event: EventTouch): void {
-        const touchPos = event.getUILocation();
-        const currentPos = new Vec3(touchPos.x, touchPos.y, 0);
-        
-        // Check if we've moved enough to consider this a drag
-        if (this.touchStartPos && !this.isDragGesture) {
-            const dx = currentPos.x - this.touchStartPos.x;
-            const dy = currentPos.y - this.touchStartPos.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance > this.DRAG_THRESHOLD) {
-                this.isDragGesture = true;
-                this.startGridDragIfValid();
-            }
-        }
-        
-        // Update drag if active
-        if (this.isDragGesture) {
-            this.onGlobalTouchMove(event);
-            event.propagationStopped = true;
-        }
-    }
+    private onTouchMove(event: any): void {
+        if (!event) return;
+        const touch = event.touch;
+        if (!touch) return;
+        const loc = touch.getLocation();
+        const pos = new Vec3(loc.x, loc.y, 0);
+        const controller = this.dragController;
+        if (!controller) return;
 
-    /**
-     * Touch end capture phase - handle drop or tap
-     */
-    private onTouchEndCapture(event: EventTouch): void {
-        if (this.isDragGesture) {
-            // Was dragging - handle drop
-            this.onGlobalTouchEnd(event);
-            event.propagationStopped = true;
-        } else if (this.dragStartCell) {
-            // Was a tap - trigger cell touch
-            const touchPos = event.getUILocation();
-            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
-            if (localPos) {
-                this.onCellTouch(localPos.row, localPos.col);
-            }
-        }
-        
-        // Reset state
-        this.touchStartPos = null;
-        this.isDragGesture = false;
-        this.dragStartCell = null;
-    }
-
-    /**
-     * Start grid drag if we have a valid item
-     */
-    private startGridDragIfValid(): void {
-        if (this.dragStartCell && this.gridManager && !this.isDraggingInGrid) {
-            const itemId = this.gridManager.getItemAt(this.dragStartCell);
-            if (itemId) {
-                this.isDraggingInGrid = true;
-                this.draggingItemId = itemId;
-                this.createDragPreviewFromGrid(itemId, this.dragStartCell);
-            }
-        }
-    }
-
-    /**
-     * Create drag preview from grid item
-     */
-    private createDragPreviewFromGrid(itemId: string, _startCell: { row: number; col: number }): void {
-        if (this.dragPreviewNode) {
-            this.dragPreviewNode.destroy();
+        // If already dragging (shop or grid), update
+        if (controller.isDragging()) {
+            const containerNode = this.container ?? this.node;
+            controller.updateDrag(pos, (p) => controller.getCellFromPosition(p, containerNode));
+            return;
         }
 
-        const item = this.gridManager?.itemsMap?.get(itemId);
-        if (!item) return;
-
-        const template = this.itemDB?.getTemplate(item.templateId);
-        
-        this.dragPreviewNode = new Node('dragPreview');
-        const transform = this.dragPreviewNode.addComponent(UITransform);
-        transform.setContentSize(this.actualCellSize, this.actualCellSize);
-        
-        const sprite = this.dragPreviewNode.addComponent(Sprite);
-        if (template?.color) {
-            sprite.color = this.parseHexColor(template.color);
-        } else {
-            sprite.color = this.occupiedColor;
-        }
-
-        const labelNode = new Node('label');
-        const labelTransform = labelNode.addComponent(UITransform);
-        labelTransform.setContentSize(this.actualCellSize * 0.8, this.actualCellSize * 0.8);
-        labelNode.setPosition(0, 0, 0);
-        this.dragPreviewNode.addChild(labelNode);
-
-        const label = labelNode.addComponent(Label);
-        label.fontSize = Math.floor(this.actualCellSize * 0.6);
-        label.horizontalAlign = Label.HorizontalAlign.CENTER;
-        label.verticalAlign = Label.VerticalAlign.CENTER;
-        label.string = template?.emoji ?? '?';
-
-        this.node.addChild(this.dragPreviewNode);
-    }
-
-    /**
-     * End grid internal drag
-     */
-    private endGridDrag(): void {
-        this.isDraggingInGrid = false;
-        this.draggingItemId = null;
-        this.dragStartCell = null;
-        this.clearHoverEffect();
-        if (this.dragPreviewNode) {
-            this.dragPreviewNode.destroy();
-            this.dragPreviewNode = null;
-        }
-    }
-
-    // ============= Cell Creation =============
-
-    /**
-     * Create grid cells using Sprite nodes with node pool
-     */
-    private createCells(): void {
-        const targetContainer = this.container ?? this.node;
-        
-        // Calculate cell size
-        if (this.cellSize > 0) {
-            this.actualCellSize = this.cellSize;
-        } else {
-            const containerWidth = targetContainer.getComponent(UITransform)?.width ?? 500;
-            const containerHeight = targetContainer.getComponent(UITransform)?.height ?? 500;
-            this.actualCellSize = Math.floor(Math.min(
-                (containerWidth - this.cellGap * (this.cols + 1)) / this.cols,
-                (containerHeight - this.cellGap * (this.rows + 1)) / this.rows
-            ));
-        }
-
-        // First, hide all existing cells
-        this.cellNodes.forEach((node) => {
-            node.active = false;
-        });
-        
-        // Reuse or create cells
-        for (let row = 0; row < this.rows; row++) {
-            for (let col = 0; col < this.cols; col++) {
-                const key = `${row},${col}`;
-                let cellNode: Node | undefined = this.cellNodes.get(key);
-                
-                if (!cellNode) {
-                    // Try to get from pool
-                    if (this.cellPool.length > 0) {
-                        cellNode = this.cellPool.pop()!;
-                        this.updateCellPosition(cellNode, row, col);
-                    } else {
-                        // Create new if pool empty
-                        cellNode = this.createCellNode(row, col);
+        // Check drag threshold to start grid drag
+        if (this.touchStartPos && this.touchStartCell) {
+            const dx = pos.x - this.touchStartPos.x;
+            const dy = pos.y - this.touchStartPos.y;
+            if (Math.sqrt(dx * dx + dy * dy) > 10) {
+                const itemId = this.gridManager?.getItemAt(this.touchStartCell);
+                if (itemId) {
+                    controller.startGridDrag(itemId, this.touchStartCell, pos);
+                    // Add preview to scene
+                    const previewNode = (controller as any).dragState?.previewNode;
+                    if (previewNode) {
+                        this.node.addChild(previewNode);
                     }
-                    targetContainer.addChild(cellNode);
-                    this.cellNodes.set(key, cellNode);
                 }
-                
-                // Reactivate and update position
-                cellNode.active = true;
-                this.updateCellPosition(cellNode, row, col);
-            }
-        }
-        
-        // Recycle excess nodes to pool
-        this.cellNodes.forEach((node, key) => {
-            const [r, c] = key.split(',').map(Number);
-            if (r >= this.rows || c >= this.cols) {
-                node.active = false;
-                this.cellPool.push(node);
-                this.cellNodes.delete(key);
-            }
-        });
-    }
-
-    /**
-     * Update cell position
-     */
-    private updateCellPosition(cellNode: Node, row: number, col: number): void {
-        const visualRow = (this.rows - 1) - row;
-        const x = this.cellGap + col * (this.actualCellSize + this.cellGap);
-        const y = this.cellGap + visualRow * (this.actualCellSize + this.cellGap);
-        cellNode.setPosition(x, -y, 0);
-    }
-
-    /**
-     * Create a single cell node using Sprite or prefab
-     */
-    private createCellNode(row: number, col: number): Node {
-        let cellNode: Node;
-
-        // Use prefab if available
-        if (this.cellPrefab) {
-            cellNode = this.cellPrefab.clone();
-            cellNode.name = `cell_${row}_${col}`;
-        } else {
-            // Create new node with Sprite
-            cellNode = new Node(`cell_${row}_${col}`);
-            
-            // Add UITransform
-            const transform = cellNode.addComponent(UITransform);
-            transform.setContentSize(this.actualCellSize, this.actualCellSize);
-
-            // Add Sprite component
-            const sprite = cellNode.addComponent(Sprite);
-            // Sprite color will be set in refreshGrid
-        }
-
-        // Position (flip row so row 0 = bottom in visual)
-        const visualRow = (this.rows - 1) - row;
-        const x = this.cellGap + col * (this.actualCellSize + this.cellGap);
-        const y = this.cellGap + visualRow * (this.actualCellSize + this.cellGap);
-        cellNode.setPosition(x, -y, 0);
-
-        // Add Label for emoji
-        const labelNode = new Node('label');
-        const labelTransform = labelNode.addComponent(UITransform);
-        labelTransform.setContentSize(this.actualCellSize * 0.8, this.actualCellSize * 0.8);
-        labelNode.setPosition(0, 0, 0);
-        cellNode.addChild(labelNode);
-
-        const label = labelNode.addComponent(Label);
-        label.fontSize = Math.floor(this.actualCellSize * 0.6);
-        label.horizontalAlign = Label.HorizontalAlign.CENTER;
-        label.verticalAlign = Label.VerticalAlign.CENTER;
-        label.string = '';
-
-        return cellNode;
-    }
-
-    // ============= Grid Refresh =============
-
-    /**
-     * Refresh grid display
-     */
-    public refreshGrid(): void {
-        if (!this.gridManager) return;
-
-        const items = this.gridManager.getAllItems();
-
-        // Reset all cells to empty
-        this.cellNodes.forEach((node) => {
-            this.setCellEmpty(node);
-        });
-
-        // Draw items
-        for (const item of items) {
-            const pos = item.position;
-            const key = `${pos.row},${pos.col}`;
-            const cellNode = this.cellNodes.get(key);
-
-            if (cellNode && item) {
-                this.setCellOccupied(cellNode, item);
             }
         }
     }
 
-    /**
-     * Set cell to empty state
-     */
-    private setCellEmpty(node: Node): void {
-        const sprite = node.getComponent(Sprite);
-        if (sprite) {
-            sprite.color = this.emptyColor;
-        }
-        
-        const label = node.getChildByName('label')?.getComponent(Label);
-        if (label) {
-            label.string = '';
-        }
-    }
+    private onTouchEnd(event: any): void {
+        if (!event) return;
+        const touch = event.touch;
+        if (!touch) return;
+        const loc = touch.getLocation();
+        const pos = new Vec3(loc.x, loc.y, 0);
+        const controller = this.dragController;
 
-    /**
-     * Set cell to occupied state with item
-     */
-    private setCellOccupied(node: Node, item: IGridItem): void {
-        // Get template for color and emoji
-        const template = this.itemDB?.getTemplate(item.templateId);
-        
-        // Set sprite color
-        const sprite = node.getComponent(Sprite);
-        if (sprite && template?.color) {
-            sprite.color = this.parseHexColor(template.color);
-        } else if (sprite) {
-            sprite.color = this.occupiedColor;
-        }
-
-        // Set emoji label
-        const label = node.getChildByName('label')?.getComponent(Label);
-        if (label && template?.emoji) {
-            label.string = template.emoji;
-        }
-    }
-
-    /**
-     * Parse hex color
-     */
-    private parseHexColor(hex: string): Color {
-        if (!hex || hex.length < 7) {
-            return new Color(255, 255, 255, 255);
-        }
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return new Color(r, g, b, 255);
-    }
-
-    // ============= Touch Handling =============
-
-    /**
-     * Handle cell touch start
-     */
-    private onCellTouchStart(event: EventTouch, row: number, col: number): void {
-        if (this.isDraggingFromShop) {
-            // Check if this cell is valid drop target
-            const pos = { row, col };
-            const itemAtPos = this.gridManager?.getItemAt(pos);
-            const isValid = !itemAtPos;
-            this.setHoverEffect(row, col, isValid);
-            event.propagationStopped = true;
-        } else {
-            this.onCellTouch(row, col);
-        }
-    }
-
-    /**
-     * Handle cell touch move (for hover feedback during drag)
-     */
-    private onCellTouchMove(event: EventTouch, row: number, col: number): void {
-        if (this.isDraggingFromShop) {
-            // Update hover feedback
-            const pos = { row, col };
-            const itemAtPos = this.gridManager?.getItemAt(pos);
-            const isValid = !itemAtPos;
-            this.setHoverEffect(row, col, isValid);
-
-            // Update drag preview position
-            const touchPos = event.getUILocation();
-            this.updateDragPreview(new Vec3(touchPos.x, touchPos.y, 0));
-            event.propagationStopped = true;
-        }
-    }
-
-    /**
-     * Handle cell touch end
-     */
-    private onCellTouchEnd(event: EventTouch, row: number, col: number): void {
-        if (this.isDraggingFromShop) {
-            // Attempt to drop
-            const pos = { row, col };
-            const itemAtPos = this.gridManager?.getItemAt(pos);
-
-            if (!itemAtPos) {
-                // Valid drop position
-                this.endDrag(pos);
-            } else {
-                // Invalid - occupied
-                this.cancelDrag();
+        if (controller?.isDragging()) {
+            const containerNode = this.container ?? this.node;
+            controller.endDrag(pos, (p) => controller.getCellFromPosition(p, containerNode));
+        } else if (this.touchStartCell) {
+            // Tap (not drag) — handle cell selection
+            const cell = this.getCellFromPosition(pos);
+            if (cell) {
+                this.onCellTouch(cell.row, cell.col);
             }
-            event.propagationStopped = true;
-        } else {
-            // Normal cell tap handled in onCellTouch
         }
+
+        this.touchStartPos = null;
+        this.touchStartCell = null;
     }
 
-    /**
-     * Handle cell tap (original logic)
-     */
+    // ============= Cell Touch (tap-to-select) =============
+
     private onCellTouch(row: number, col: number): void {
         if (!this.gridManager || !this.gameLoop) return;
 
         const itemAtPos = this.gridManager.getItemAt({ row, col });
 
         if (this.selectedItemId) {
-            // Try to move to empty cell
             if (!itemAtPos) {
                 const success = this.gameLoop.moveItem(this.selectedItemId, { row, col });
                 if (success) {
@@ -890,7 +278,6 @@ export class GridPanelComp extends Component {
                 }
             }
 
-            // Deselect or select different
             const selectedItem = this.gridManager.itemsMap?.get(this.selectedItemId);
             if (selectedItem && selectedItem.position.row === row && selectedItem.position.col === col) {
                 this.selectedItemId = null;
@@ -914,59 +301,230 @@ export class GridPanelComp extends Component {
         }
     }
 
+    // ============= Hover Feedback =============
+
+    private hoveredCell: { row: number; col: number } | null = null;
+
+    private setHoverEffect(row: number, col: number, isValid: boolean): void {
+        this.clearHoverEffect();
+        const key = `${row},${col}`;
+        const cellNode = this.cellNodes.get(key);
+        if (!cellNode) return;
+
+        this.hoveredCell = { row, col };
+        const sprite = cellNode.getComponent(Sprite);
+        if (sprite) {
+            sprite.color = isValid ? this.validDropColor : this.invalidDropColor;
+        }
+    }
+
+    private clearHoverEffect(): void {
+        if (!this.hoveredCell) return;
+        const key = `${this.hoveredCell.row},${this.hoveredCell.col}`;
+        const cellNode = this.cellNodes.get(key);
+        if (cellNode) {
+            const pos = { row: this.hoveredCell.row, col: this.hoveredCell.col };
+            const itemId = this.gridManager?.getItemAt(pos);
+            if (itemId && this.gridManager?.itemsMap) {
+                const item = this.gridManager.itemsMap.get(itemId);
+                if (item) {
+                    this.setCellOccupied(cellNode, item);
+                } else {
+                    this.setCellEmpty(cellNode);
+                }
+            } else {
+                this.setCellEmpty(cellNode);
+            }
+        }
+        this.hoveredCell = null;
+    }
+
+    // ============= Cell Creation =============
+
+    private createCells(): void {
+        const targetContainer = this.container ?? this.node;
+
+        if (this.cellSize > 0) {
+            this.actualCellSize = this.cellSize;
+        } else {
+            const containerWidth = targetContainer.getComponent(UITransform)?.width ?? 500;
+            const containerHeight = targetContainer.getComponent(UITransform)?.height ?? 500;
+            this.actualCellSize = Math.floor(Math.min(
+                (containerWidth - this.cellGap * (this.cols + 1)) / this.cols,
+                (containerHeight - this.cellGap * (this.rows + 1)) / this.rows
+            ));
+        }
+
+        this.cellNodes.forEach((node) => { node.active = false; });
+
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
+                const key = `${row},${col}`;
+                let cellNode: Node | undefined = this.cellNodes.get(key);
+
+                if (!cellNode) {
+                    cellNode = this.cellPool.length > 0
+                        ? this.cellPool.pop()!
+                        : this.createCellNode(row, col);
+                    targetContainer.addChild(cellNode);
+                    this.cellNodes.set(key, cellNode);
+                }
+
+                cellNode.active = true;
+                this.updateCellPosition(cellNode, row, col);
+            }
+        }
+
+        this.cellNodes.forEach((node, key) => {
+            const [r, c] = key.split(',').map(Number);
+            if (r >= this.rows || c >= this.cols) {
+                node.active = false;
+                this.cellPool.push(node);
+                this.cellNodes.delete(key);
+            }
+        });
+    }
+
+    private updateCellPosition(cellNode: Node, row: number, col: number): void {
+        const visualRow = (this.rows - 1) - row;
+        const x = this.cellGap + col * (this.actualCellSize + this.cellGap);
+        const y = this.cellGap + visualRow * (this.actualCellSize + this.cellGap);
+        cellNode.setPosition(x, -y, 0);
+    }
+
+    private createCellNode(row: number, col: number): Node {
+        let cellNode: Node;
+
+        if (this.cellPrefab) {
+            cellNode = this.cellPrefab.clone();
+            cellNode.name = `cell_${row}_${col}`;
+        } else {
+            cellNode = new Node(`cell_${row}_${col}`);
+            const transform = cellNode.addComponent(UITransform);
+            transform.setContentSize(this.actualCellSize, this.actualCellSize);
+            cellNode.addComponent(Sprite);
+        }
+
+        this.updateCellPosition(cellNode, row, col);
+
+        const labelNode = new Node('label');
+        const labelTransform = labelNode.addComponent(UITransform);
+        labelTransform.setContentSize(this.actualCellSize * 0.8, this.actualCellSize * 0.8);
+        labelNode.setPosition(0, 0, 0);
+        cellNode.addChild(labelNode);
+
+        const label = labelNode.addComponent(Label);
+        label.fontSize = Math.floor(this.actualCellSize * 0.6);
+        label.horizontalAlign = Label.HorizontalAlign.CENTER;
+        label.verticalAlign = Label.VerticalAlign.CENTER;
+        label.string = '';
+
+        return cellNode;
+    }
+
+    // ============= Grid Refresh =============
+
+    public refreshGrid(): void {
+        if (!this.gridManager) return;
+
+        const items = this.gridManager.getAllItems();
+        this.cellNodes.forEach((node) => { this.setCellEmpty(node); });
+
+        for (const item of items) {
+            const key = `${item.position.row},${item.position.col}`;
+            const cellNode = this.cellNodes.get(key);
+            if (cellNode) {
+                this.setCellOccupied(cellNode, item);
+            }
+        }
+    }
+
+    private setCellEmpty(node: Node): void {
+        const sprite = node.getComponent(Sprite);
+        if (sprite) sprite.color = this.emptyColor;
+        const label = node.getChildByName('label')?.getComponent(Label);
+        if (label) label.string = '';
+    }
+
+    private setCellOccupied(node: Node, item: IGridItem): void {
+        const template = this.itemDB?.getTemplate(item.templateId);
+        const sprite = node.getComponent(Sprite);
+        if (sprite && template?.color) {
+            sprite.color = this.parseHexColor(template.color);
+        } else if (sprite) {
+            sprite.color = this.occupiedColor;
+        }
+        const label = node.getChildByName('label')?.getComponent(Label);
+        if (label && template?.emoji) {
+            label.string = template.emoji;
+        }
+    }
+
+    private parseHexColor(hex: string): Color {
+        if (!hex || hex.length < 7) return new Color(255, 255, 255, 255);
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return new Color(r, g, b, 255);
+    }
+
+    // ============= Coordinate Conversion (fallback) =============
+
+    private getCellFromPositionLocal(worldPos: Vec3): IGridPosition | null {
+        const containerNode = this.container ?? this.node;
+        const transform = containerNode.getComponent(UITransform);
+        if (!transform) return null;
+
+        const localPos = transform.convertToNodeSpaceAR(worldPos);
+        if (!localPos) return null;
+
+        const step = this.actualCellSize + this.cellGap;
+        const gridWidth = this.cols * step;
+        const gridHeight = this.rows * step;
+
+        if (localPos.x < 0 || localPos.x > gridWidth || localPos.y > 0 || localPos.y < -gridHeight) {
+            return null;
+        }
+
+        const effectiveY = -localPos.y;
+        const col = Math.floor(localPos.x / step);
+        const rowFromTop = Math.floor(effectiveY / step);
+        const row = (this.rows - 1) - rowFromTop;
+
+        if (row >= 0 && row < this.rows && col >= 0 && col < this.cols) {
+            return { row, col };
+        }
+        return null;
+    }
+
     // ============= Public API =============
 
-    /**
-     * Clear selection
-     */
     public clearSelection(): void {
         this.selectedItemId = null;
         this.refreshGrid();
     }
 
-    /**
-     * Get selected item ID
-     */
     public getSelectedItemId(): string | null {
         return this.selectedItemId;
     }
 
-    /**
-     * Set cell size
-     */
     public setCellSize(size: number): void {
         this.actualCellSize = size;
         this.createCells();
         this.refreshGrid();
     }
 
-    /**
-     * Get cell size
-     */
     public getCellSize(): number {
         return this.actualCellSize;
     }
 
-    /**
-     * Get grid manager
-     */
     public getGridManager(): GridManager | null {
         return this.gridManager;
     }
 
-    /**
-     * Destroy
-     */
     public onDestroy(): void {
-        // Clean up global input listeners
-        if (input) {
-            input.off('touchstart', this.onGlobalTouchStart, this);
-            input.off('touchmove', this.onGlobalTouchMove, this);
-            input.off('touchend', this.onGlobalTouchEnd, this);
-        }
-        
-        this.cancelDrag();
-        this.endGridDrag();
+        this.removeTouchListeners();
+        this.dragController?.destroy();
         this.cellNodes.forEach(node => node.destroy());
         this.cellNodes.clear();
         this.cellPool.forEach(node => node.destroy());
@@ -975,9 +533,6 @@ export class GridPanelComp extends Component {
 
     // ============= GridView Compatibility =============
 
-    /**
-     * Sync from GridView (properly typed)
-     */
     public syncFromGridView(gridView: GridView): void {
         this.gridView = gridView;
         this.gridManager = gridView.getGridManager();
