@@ -514,5 +514,5 @@ export class ScreenAdapter extends Component {
     }
 }
 
-// Export types
-export type { SafeAreaConfig };
+// Export types (removed duplicate re-export)
+// SafeAreaConfig already exported via interface above

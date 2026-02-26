@@ -56,3 +56,41 @@ export const SpriteAtlas: new (...args: any[]) => any;
 export const HorizontalAlign: any;
 export const VerticalAlign: any;
 export const TouchEvent: { TOUCH_END: any; TOUCH_START: any; TOUCH_MOVE: any };
+
+// ============= ScreenAdapter dependencies =============
+
+// view - screen/view management
+export interface ViewInterface {
+    on(event: string, callback: Function, target?: any): void;
+    off(event: string, callback: Function, target?: any): void;
+    getCanvasSize(): Vec2Interface;
+    getSafeAreaRect(): Vec4Interface;
+}
+export const view: ViewInterface;
+
+// Screen - screen class
+export const Screen: new (...args: any[]) => any;
+
+// Vec2 - 2D vector (both value and type)
+export interface Vec2Interface {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    set(x: number, y: number): Vec2Interface;
+}
+export type Vec2 = Vec2Interface;
+export const Vec2: new (...args?: number[]) => Vec2Interface;
+
+// Vec4 - 4D vector (both value and type)
+export interface Vec4Interface {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+    width: number;
+    height: number;
+    set(x: number, y: number, z: number, w: number): Vec4Interface;
+}
+export type Vec4 = Vec4Interface;
+export const Vec4: new (...args?: number[]) => Vec4Interface;
