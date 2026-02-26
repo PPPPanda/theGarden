@@ -307,30 +307,152 @@ export class GridPanelComp extends Component {
      */
     private setupGlobalTouchListeners(): void {
         // Use global input system for reliable cross-component drag
-        // This ensures we capture MOVE/END even when touch starts outside grid
+        // This ensures we capture MOVE/END even when touch starts outside grid (e.g., from ShopPanel)
         
-        // We'll use node-level touch with capture phase on this node
-        const targetNode = this.container ?? this.node;
-        
-        // Ensure touchOverlay exists for capturing
-        if (!targetNode.getChildByName('touchOverlay')) {
-            const overlay = new Node('touchOverlay');
-            const transform = overlay.addComponent(UITransform);
-            const containerTransform = targetNode.getComponent(UITransform);
-            if (containerTransform) {
-                transform.setContentSize(containerTransform.width, containerTransform.height);
-            } else {
-                transform.setContentSize(this.cols * (this.actualCellSize + this.cellGap), this.rows * (this.actualCellSize + this.cellGap));
+        // Register on global input system - this works across all nodes
+        if (input) {
+            input.on('touchstart', this.onGlobalTouchStart, this);
+            input.on('touchmove', this.onGlobalTouchMove, this);
+            input.on('touchend', this.onGlobalTouchEnd, this);
+        } else {
+            // Fallback to node-level capture phase
+            const targetNode = this.container ?? this.node;
+            
+            // Ensure touchOverlay exists for capturing
+            if (!targetNode.getChildByName('touchOverlay')) {
+                const overlay = new Node('touchOverlay');
+                const transform = overlay.addComponent(UITransform);
+                const containerTransform = targetNode.getComponent(UITransform);
+                if (containerTransform) {
+                    transform.setContentSize(containerTransform.width, containerTransform.height);
+                } else {
+                    transform.setContentSize(this.cols * (this.actualCellSize + this.cellGap), this.rows * (this.actualCellSize + this.cellGap));
+                }
+                overlay.setPosition(transform.width / 2, -transform.height / 2, 0);
+                targetNode.addChild(overlay);
             }
-            overlay.setPosition(transform.width / 2, -transform.height / 2, 0);
-            targetNode.addChild(overlay);
+            
+            // Register capture phase listeners on this node
+            this.node.on(EventTouch.TOUCH_START, this.onTouchStartCapture, this, true);
+            this.node.on(EventTouch.TOUCH_MOVE, this.onTouchMoveCapture, this, true);
+            this.node.on(EventTouch.TOUCH_END, this.onTouchEndCapture, this, true);
+        }
+    }
+
+    /**
+     * Global touch start - for cross-component drag
+     */
+    private onGlobalTouchStart(event?: EventTouch): void {
+        if (!event) return;
+        
+        const touch = event.touch;
+        if (!touch) return;
+        
+        const touchPos = touch.getLocation();
+        this.touchStartPos = new Vec3(touchPos.x, touchPos.y, 0);
+        this.isDragGesture = false;
+        
+        // Check if starting on an item - prepare for potential drag
+        const localPos = this.getCellFromPosition(this.touchStartPos);
+        if (localPos && this.gridManager) {
+            const itemId = this.gridManager.getItemAt(localPos);
+            if (itemId) {
+                this.dragStartCell = localPos;
+            }
+        }
+    }
+
+    /**
+     * Global touch move - for cross-component drag
+     */
+    private onGlobalTouchMove(event?: EventTouch): void {
+        if (!event) return;
+        
+        const touch = event.touch;
+        if (!touch) return;
+        
+        const touchPos = touch.getLocation();
+        const currentPos = new Vec3(touchPos.x, touchPos.y, 0);
+        
+        // Check if we've moved enough to consider this a drag
+        if (this.touchStartPos && !this.isDragGesture) {
+            const dx = currentPos.x - this.touchStartPos.x;
+            const dy = currentPos.y - this.touchStartPos.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > this.DRAG_THRESHOLD) {
+                this.isDragGesture = true;
+                this.startGridDragIfValid();
+            }
         }
         
-        // Register global input listeners on this component's node
-        // Use capture phase to intercept before children
-        this.node.on(EventTouch.TOUCH_START, this.onTouchStartCapture, this, true);
-        this.node.on(EventTouch.TOUCH_MOVE, this.onTouchMoveCapture, this, true);
-        this.node.on(EventTouch.TOUCH_END, this.onTouchEndCapture, this, true);
+        // Update drag feedback if active
+        if (this.isDragGesture || this.isDraggingFromShop) {
+            this.updateDragPreview(currentPos);
+            
+            const localPos = this.getCellFromPosition(currentPos);
+            if (this.isDraggingFromShop && localPos) {
+                const itemAtPos = this.gridManager?.getItemAt(localPos);
+                this.setHoverEffect(localPos.row, localPos.col, !itemAtPos);
+            } else if (this.isDraggingInGrid && localPos) {
+                const itemAtPos = this.gridManager?.getItemAt(localPos);
+                const isSameCell = localPos.row === this.dragStartCell?.row && localPos.col === this.dragStartCell?.col;
+                this.setHoverEffect(localPos.row, localPos.col, !itemAtPos || isSameCell);
+            }
+        }
+    }
+
+    /**
+     * Global touch end - for cross-component drag
+     */
+    private onGlobalTouchEnd(event?: EventTouch): void {
+        if (!event) return;
+        
+        const touch = event.touch;
+        if (!touch) return;
+        
+        const touchPos = touch.getLocation();
+        
+        if (this.isDragGesture || this.isDraggingInGrid) {
+            // Handle grid internal move
+            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
+            if (localPos && this.draggingItemId && this.dragStartCell) {
+                if (localPos.row !== this.dragStartCell.row || localPos.col !== this.dragStartCell.col) {
+                    const itemAtPos = this.gridManager?.getItemAt(localPos);
+                    if (!itemAtPos && this.gameLoop) {
+                        const success = this.gameLoop.moveItem(this.draggingItemId, localPos);
+                        if (success) {
+                            this.refreshGrid();
+                        }
+                    }
+                }
+            }
+            this.endGridDrag();
+        } else if (this.isDraggingFromShop) {
+            // Handle shop item drop
+            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
+            if (localPos) {
+                const itemAtPos = this.gridManager?.getItemAt(localPos);
+                if (!itemAtPos) {
+                    this.endDrag(localPos);
+                } else {
+                    this.cancelDrag();
+                }
+            } else {
+                this.cancelDrag();
+            }
+        } else if (this.dragStartCell) {
+            // Was a tap - trigger cell touch
+            const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
+            if (localPos) {
+                this.onCellTouch(localPos.row, localPos.col);
+            }
+        }
+        
+        // Reset state
+        this.touchStartPos = null;
+        this.isDragGesture = false;
+        this.dragStartCell = null;
     }
 
     /**
@@ -416,73 +538,6 @@ export class GridPanelComp extends Component {
                 this.draggingItemId = itemId;
                 this.createDragPreviewFromGrid(itemId, this.dragStartCell);
             }
-        }
-    }
-
-    /**
-     * Handle global touch move
-     */
-    private onGlobalTouchMove(event: EventTouch): void {
-        const touchPos = event.getUILocation();
-        const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
-
-        // Update drag preview position
-        this.updateDragPreview(new Vec3(touchPos.x, touchPos.y, 0));
-
-        if (this.isDraggingFromShop) {
-            // Shop item drag feedback
-            if (localPos) {
-                const itemAtPos = this.gridManager?.getItemAt(localPos);
-                this.setHoverEffect(localPos.row, localPos.col, !itemAtPos);
-            } else {
-                this.clearHoverEffect();
-            }
-            event.propagationStopped = true;
-        } else if (this.isDraggingInGrid && localPos) {
-            // Grid internal drag feedback
-            const itemAtPos = this.gridManager?.getItemAt(localPos);
-            this.setHoverEffect(localPos.row, localPos.col, !itemAtPos || (localPos.row === this.dragStartCell?.row && localPos.col === this.dragStartCell?.col));
-            event.propagationStopped = true;
-        }
-    }
-
-    /**
-     * Handle global touch end
-     */
-    private onGlobalTouchEnd(event: EventTouch): void {
-        const touchPos = event.getUILocation();
-        const localPos = this.getCellFromPosition(new Vec3(touchPos.x, touchPos.y, 0));
-
-        if (this.isDraggingFromShop) {
-            // Handle shop item drop
-            if (localPos) {
-                const itemAtPos = this.gridManager?.getItemAt(localPos);
-                if (!itemAtPos) {
-                    this.endDrag(localPos);
-                } else {
-                    this.cancelDrag();
-                }
-            } else {
-                this.cancelDrag();
-            }
-            event.propagationStopped = true;
-        } else if (this.isDraggingInGrid) {
-            // Handle grid internal move
-            if (localPos && this.draggingItemId && this.dragStartCell) {
-                // Don't move to same cell
-                if (localPos.row !== this.dragStartCell.row || localPos.col !== this.dragStartCell.col) {
-                    const itemAtPos = this.gridManager?.getItemAt(localPos);
-                    if (!itemAtPos && this.gameLoop) {
-                        // Empty cell - move item
-                        const success = this.gameLoop.moveItem(this.draggingItemId, localPos);
-                        if (success) {
-                            this.refreshGrid();
-                        }
-                    }
-                }
-            }
-            this.endGridDrag();
-            event.propagationStopped = true;
         }
     }
 
@@ -882,7 +937,15 @@ export class GridPanelComp extends Component {
      * Destroy
      */
     public onDestroy(): void {
+        // Clean up global input listeners
+        if (input) {
+            input.off('touchstart', this.onGlobalTouchStart, this);
+            input.off('touchmove', this.onGlobalTouchMove, this);
+            input.off('touchend', this.onGlobalTouchEnd, this);
+        }
+        
         this.cancelDrag();
+        this.endGridDrag();
         this.cellNodes.forEach(node => node.destroy());
         this.cellNodes.clear();
         this.cellPool.forEach(node => node.destroy());
