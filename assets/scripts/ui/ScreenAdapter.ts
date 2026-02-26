@@ -55,7 +55,7 @@ export class ScreenAdapter extends Component {
     // ============= Properties =============
 
     @property({ tooltip: 'Target orientation (portrait / landscape / auto)' })
-    public targetOrientation: Orientation = Orientation.Portrait;
+    public targetOrientation: Orientation = Orientation.Auto;
 
     @property({ type: CCFloat, tooltip: 'Reference design width' })
     public referenceWidth: number = REFERENCE_WIDTH;
