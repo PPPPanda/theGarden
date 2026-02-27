@@ -459,13 +459,23 @@ export class BattleEngine {
                     break;
                 case 'buff': {
                     const buffType = this.resolveBuffStatusType(effect.params);
-                    this.addStatusEffect(sourceSide, {
-                        type: buffType,
-                        duration: (effect.params?.duration as number) ?? 5,
-                        value: effect.value,
-                        sourceItemId: item.id,
-                        stacks: Math.max(1, effect.value)
-                    });
+                    
+                    // Handle Charge specially - reduces cooldown instead of adding status effect
+                    if (buffType === StatusEffectType.Charge) {
+                        // Charge reduces cooldown of all items on source side
+                        const chargeAmount = effect.value;
+                        this.applyChargeToSide(sourceSide, chargeAmount, item.id);
+                        console.log(`[BattleEngine] Charge: reduced cooldown by ${chargeAmount} for ${sourceSide} side`);
+                    } else {
+                        // Other buffs create status effects
+                        this.addStatusEffect(sourceSide, {
+                            type: buffType,
+                            duration: (effect.params?.duration as number) ?? 5,
+                            value: effect.value,
+                            sourceItemId: item.id,
+                            stacks: Math.max(1, effect.value)
+                        });
+                    }
                     break;
                 }
                 case 'debuff':
@@ -512,6 +522,24 @@ export class BattleEngine {
         }
 
         return mapped;
+    }
+
+    /**
+     * Apply charge effect - reduces cooldown of all items on the given side
+     * Charge is an instant effect that reduces currentCooldown (not a status effect)
+     */
+    private applyChargeToSide(side: 'player' | 'enemy', chargeAmount: number, sourceItemId: string): void {
+        const items = side === 'player' ? this.playerItems : this.enemyItems;
+        
+        for (const item of items) {
+            if (item.destroyed) continue;
+            
+            // Reduce cooldown, clamped to minimum 0
+            const oldCooldown = item.currentCooldown;
+            item.currentCooldown = Math.max(0, item.currentCooldown - chargeAmount);
+            
+            console.log(`[BattleEngine] Charge: item ${item.id} (${item.name}) cooldown ${oldCooldown}s -> ${item.currentCooldown}s`);
+        }
     }
 
     /**
