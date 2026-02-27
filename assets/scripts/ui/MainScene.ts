@@ -3,7 +3,7 @@
  * Coordinates all game systems and UI
  */
 
-import { _decorator, Component, Node, Vec3 } from 'cc';
+import { _decorator, Component, Node, Vec3, Button } from 'cc';
 import { GameLoop, GamePhase, getGameLoop } from '../core/GameLoop';
 import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
@@ -637,8 +637,8 @@ export class MainScene extends Component {
         
         for (const btn of buttons) {
             if (btn.node) {
-                const buttonComp = btn.node.getComponent('cc.Button') as any;
-                const hasClickEvents = buttonComp && buttonComp.clickEvents && buttonComp.clickEvents.length > 0;
+                const buttonComp = btn.node.getComponent(Button);
+                const hasClickEvents = (buttonComp?.clickEvents?.length ?? 0) > 0;
                 console.log(`[MainScene] ${btn.name}: found, Button component: ${!!buttonComp}, clickEvents: ${hasClickEvents ? 'yes' : 'none'}`);
             } else {
                 console.log(`[MainScene] ${btn.name}: NOT FOUND at runtime path`);

@@ -223,12 +223,8 @@ export class HUD extends Component {
         if (this.timerText) {
             const label = this.timerText.getComponent(Label);
             if (label) {
-                const timer = (this.gameLoop as any).getTimer?.();
-                if (timer !== null && timer !== undefined) {
-                    label.string = `${timer.toFixed(1)}s`;
-                } else {
-                    label.string = '';
-                }
+                const timer = this.getPhaseTimer();
+                label.string = timer === null ? '' : `${timer.toFixed(1)}s`;
             }
         }
     }
@@ -273,6 +269,28 @@ export class HUD extends Component {
     }
 
     // ============= Helpers =============
+
+    /**
+     * Get current phase timer for display.
+     * Returns null when no active/known timer should be shown.
+     */
+    private getPhaseTimer(): number | null {
+        if (!this.gameLoop) {
+            return null;
+        }
+
+        const battleEngine = this.gameLoop.getCurrentBattleEngine();
+        if (battleEngine) {
+            return battleEngine.getCurrentTime();
+        }
+
+        const lastBattle = this.gameLoop.getLastBattleState();
+        if (lastBattle && this.gameLoop.getPhase() === GamePhase.Result) {
+            return lastBattle.currentTime;
+        }
+
+        return null;
+    }
 
     /**
      * Format phase enum to display string

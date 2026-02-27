@@ -229,7 +229,7 @@ export class GridPanelComp extends Component {
                 if (itemId) {
                     controller.startGridDrag(itemId, this.touchStartCell, pos);
                     // Add preview to scene
-                    const previewNode = (controller as any).dragState?.previewNode;
+                    const previewNode = controller.getDragPreviewNode();
                     if (previewNode) {
                         this.node.addChild(previewNode);
                     }

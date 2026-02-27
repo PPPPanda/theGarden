@@ -204,6 +204,13 @@ export class GridDragController {
         return this.dragState.type;
     }
 
+    /**
+     * Get current drag preview node (if any).
+     */
+    public getDragPreviewNode(): Node | null {
+        return this.dragState.previewNode ?? null;
+    }
+
     // ============= Coordinate Conversion =============
 
     /**
