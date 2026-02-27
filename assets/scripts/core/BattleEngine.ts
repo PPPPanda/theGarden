@@ -553,6 +553,8 @@ export class BattleEngine {
 
         // Rebuild timeline so queued triggers really move earlier.
         // Source item is excluded to avoid self-acceleration loops.
+        // Determinism: entries are re-inserted into MinHeap with comparator (time, itemId),
+        // so equal-time ordering remains stable by itemId.
         const entries = this.eventTimeline.toArray();
         this.eventTimeline.clear();
 
