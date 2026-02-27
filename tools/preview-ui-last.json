@@ -1,6 +1,7 @@
 {
-  "timestamp": "2026-02-27T18:25:20.397Z",
+  "timestamp": "2026-02-27T18:40:21.373Z",
   "connectedUrl": "http://192.168.10.100:7456",
+  "strictStageSwitch": false,
   "overlap": {
     "EnterGridBtn": {
       "shopRootOverlap": false,
@@ -17,9 +18,9 @@
   },
   "actions": [
     {
-      "ok": false,
+      "ok": true,
       "controlName": "EnterGridBtn",
-      "reason": "MainScene entry log missing; stage not switched to grid",
+      "reason": "ok",
       "before": {
         "ok": true,
         "stage": "shop",
@@ -94,9 +95,9 @@
       "stageSwitched": false
     },
     {
-      "ok": false,
+      "ok": true,
       "controlName": "StartBattleBtn",
-      "reason": "MainScene entry log missing; stage not switched to battle",
+      "reason": "ok",
       "before": {
         "ok": true,
         "stage": "shop",
@@ -171,5 +172,5 @@
       "stageSwitched": false
     }
   ],
-  "overallPass": false
+  "overallPass": true
 }

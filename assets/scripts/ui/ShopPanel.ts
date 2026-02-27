@@ -401,15 +401,26 @@ export class ShopPanel extends Component {
     }
 
     private disableBlockInputEvents(node: Node): void {
-        const blockCompUnknown = node.getComponent('cc.BlockInputEvents') ?? node.getComponent('BlockInputEvents');
-        if (!blockCompUnknown) {
-            return;
+        const candidates: Array<unknown> = [];
+
+        const named = node.getComponent('cc.BlockInputEvents') ?? node.getComponent('BlockInputEvents');
+        if (named) {
+            candidates.push(named);
         }
 
-        const blockComp = blockCompUnknown as unknown as { enabled?: boolean };
-        if (typeof blockComp.enabled === 'boolean') {
-            blockComp.enabled = false;
-            console.warn(`[ShopPanel] Disabled BlockInputEvents on ${node.name}`);
+        for (const comp of node.components) {
+            const compName = (comp?.constructor?.name ?? '').toLowerCase();
+            if (compName.includes('blockinputevents')) {
+                candidates.push(comp);
+            }
+        }
+
+        for (const candidate of candidates) {
+            const blockComp = candidate as { enabled?: boolean };
+            if (typeof blockComp.enabled === 'boolean' && blockComp.enabled) {
+                blockComp.enabled = false;
+                console.warn(`[ShopPanel] Disabled BlockInputEvents on ${node.name}`);
+            }
         }
     }
 
@@ -936,6 +947,7 @@ export class ShopPanel extends Component {
         this.clearPlaceholderLabelsIfNeeded();
         this.ensurePurchasedListUI();
         this.syncPurchasedListByDay();
+        this.refreshInteractiveBoundsAndHitArea();
 
         this.updateGoldDisplay();
         this.updateRefreshDisplay();
