@@ -115,10 +115,35 @@ export class ItemDB {
     }
 
     /**
-     * Random item pool with weighted probability (legacy - uses all items)
+     * Random item pool with weighted probability (legacy - uses ALL items regardless of day)
+     * This maintains backward compatibility with existing callers.
      */
     public randomPool(count: number, seed?: number): IItemTemplate[] {
-        return this.randomPoolByDay(count, 1, seed); // Default to Day 1 for backward compatibility
+        const rng = seed !== undefined ? new SeededRandom(seed) : this.random;
+        const templates = this.getAllTemplates();
+        
+        if (templates.length === 0) {
+            console.warn('[ItemDB] randomPool: no items in database');
+            return [];
+        }
+        
+        const result: IItemTemplate[] = [];
+
+        for (let i = 0; i < count; i++) {
+            const weights = templates.map(t => this.getWeight(t.rarity as ItemRarity));
+            const totalWeight = weights.reduce((a, b) => a + b, 0);
+            let randomValue = rng.next() * totalWeight;
+            
+            for (let j = 0; j < templates.length; j++) {
+                randomValue -= weights[j];
+                if (randomValue <= 0) {
+                    result.push(templates[j]);
+                    break;
+                }
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -131,6 +156,7 @@ export class ItemDB {
         const rng = seed !== undefined ? new SeededRandom(seed) : this.random;
         const templates = this.getAvailableByDay(day);
         
+        // Safe fallback: if no items for day, use all templates
         if (templates.length === 0) {
             console.warn(`[ItemDB] No items available for day ${day}, falling back to all items`);
             return this.randomPool(count, seed);
