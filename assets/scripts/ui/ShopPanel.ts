@@ -4,11 +4,11 @@
  * All purchase/refresh/lock logic delegated via callbacks to MainScene.
  */
 
-import { _decorator, Component, Node, Label, Color, UITransform, EventTouch, Sprite, Button, CCFloat, CCInteger, Vec3 } from 'cc';
+import { _decorator, Component, Node, Label, Color, UITransform, EventTouch, Sprite, Button, CCFloat, CCInteger, Vec3, Graphics } from 'cc';
 import { ShopManager } from '../core/ShopManager';
 import { GameLoop } from '../core/GameLoop';
 import { ItemDB } from '../core/ItemDB';
-import { IShopSlot, IItemTemplate } from '../core/types';
+import { IShopSlot, IItemTemplate, ItemRarity } from '../core/types';
 
 const { ccclass, property } = _decorator;
 
@@ -1041,6 +1041,80 @@ export class ShopPanel extends Component {
         return label;
     }
 
+    private resolveIconFillGraphics(iconNode: Node): Graphics | null {
+        let fillNode = iconNode.getChildByName('_iconFill');
+        if (!fillNode) {
+            fillNode = new Node('_iconFill');
+            fillNode.setPosition(0, 0, 0);
+            iconNode.addChild(fillNode);
+            fillNode.setSiblingIndex(0);
+        }
+
+        const iconTransform = iconNode.getComponent(UITransform);
+        const fillTransform = fillNode.getComponent(UITransform) ?? fillNode.addComponent(UITransform);
+        if (iconTransform) {
+            fillTransform.setContentSize(iconTransform.contentSize);
+        } else {
+            fillTransform.setContentSize(this.slotSize * 0.7, this.slotSize * 0.7);
+        }
+
+        return fillNode.getComponent(Graphics) ?? fillNode.addComponent(Graphics);
+    }
+
+    private getRarityFillColor(rarity: ItemRarity | undefined): Color {
+        switch (rarity) {
+            case ItemRarity.Uncommon:
+                return new Color(76, 175, 80, 255); // #4CAF50
+            case ItemRarity.Rare:
+                return new Color(33, 150, 243, 255); // #2196F3
+            case ItemRarity.Epic:
+                return new Color(156, 39, 176, 255); // #9C27B0
+            case ItemRarity.Legendary:
+                return new Color(255, 152, 0, 255); // #FF9800
+            case ItemRarity.Common:
+            default:
+                return new Color(136, 136, 136, 255); // #888888
+        }
+    }
+
+    private drawIconFill(iconNode: Node, template: IItemTemplate | undefined, slot: IShopSlot): void {
+        const graphics = this.resolveIconFillGraphics(iconNode);
+        if (!graphics) {
+            return;
+        }
+
+        const transform = graphics.node.getComponent(UITransform);
+        if (!transform) {
+            return;
+        }
+
+        const baseColor = this.getRarityFillColor(template?.rarity);
+        const fillColor = baseColor.clone();
+        let strokeColor = new Color(20, 20, 20, 220);
+
+        if (slot.purchased) {
+            fillColor.r = this.purchasedColor.r;
+            fillColor.g = this.purchasedColor.g;
+            fillColor.b = this.purchasedColor.b;
+            fillColor.a = 170;
+            strokeColor = new Color(90, 90, 90, 200);
+        } else if (slot.locked) {
+            fillColor.a = 190;
+            strokeColor = new Color(255, 215, 0, 220);
+        }
+
+        const width = Math.max(8, transform.width - 6);
+        const height = Math.max(8, transform.height - 6);
+
+        graphics.clear();
+        graphics.lineWidth = 2;
+        graphics.fillColor = fillColor;
+        graphics.strokeColor = strokeColor;
+        graphics.roundRect(-width / 2, -height / 2, width, height, 8);
+        graphics.fill();
+        graphics.stroke();
+    }
+
     /**
      * Update a single slot display
      */
@@ -1061,11 +1135,13 @@ export class ShopPanel extends Component {
 
         // Update icon (works with both Label-only and Sprite+child-Label nodes)
         if (binding.icon) {
+            this.drawIconFill(binding.icon, template, slot);
+
             const label = this.resolveIconLabel(binding.icon);
             if (label) {
                 if (slot.purchased) {
                     label.string = '✓';
-                    label.color = this.purchasedColor;
+                    label.color = new Color(220, 220, 220, 255);
                 } else if (template?.emoji) {
                     label.string = template.emoji;
                     label.color = this.textColor;
@@ -1126,6 +1202,10 @@ export class ShopPanel extends Component {
      */
     private setSlotEmpty(binding: SlotBinding): void {
         if (binding.icon) {
+            const fillNode = binding.icon.getChildByName('_iconFill');
+            const graphics = fillNode?.getComponent(Graphics);
+            graphics?.clear();
+
             const label = this.resolveIconLabel(binding.icon);
             if (label) {
                 label.string = '';
