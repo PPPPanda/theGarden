@@ -1113,6 +1113,13 @@ export class ShopPanel extends Component {
         graphics.roundRect(-width / 2, -height / 2, width, height, 8);
         graphics.fill();
         graphics.stroke();
+
+        // Fallback tint for existing Sprite icon frames: keeps visual filled even if
+        // graphics layer is hidden by project-specific render order.
+        const iconSprite = iconNode.getComponent(Sprite);
+        if (iconSprite) {
+            iconSprite.color = fillColor;
+        }
     }
 
     /**
