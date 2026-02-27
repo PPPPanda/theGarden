@@ -118,6 +118,9 @@ export class ShopPanel extends Component {
     @property({ type: Node, tooltip: 'Gold display label node' })
     public goldLabelNode: Node | null = null;
 
+    @property({ type: Node, tooltip: 'Purchased items list label node (optional)' })
+    public purchasedListNode: Node | null = null;
+
     // ============= Style Properties =============
 
     @property({ type: Color, tooltip: 'Empty slot background color' })
@@ -152,6 +155,18 @@ export class ShopPanel extends Component {
 
     /** Runtime refresh cost label ref */
     private runtimeRefreshLabel: Label | null = null;
+
+    /** Runtime purchased list node (fallback when purchasedListNode is not bound) */
+    private runtimePurchasedListNode: Node | null = null;
+
+    /** Purchased list label ref (bound or runtime-created) */
+    private purchasedListLabel: Label | null = null;
+
+    /** Purchased item aggregation by templateId */
+    private purchasedItemCounts: Map<string, number> = new Map();
+
+    /** Last observed game day for auto-reset */
+    private lastKnownDay: number = -1;
 
     /** Cached effective interactive nodes for hit guards */
     private interactiveHitNodes: Node[] = [];
@@ -216,6 +231,7 @@ export class ShopPanel extends Component {
         this.itemDB = gameLoop.getItemDB();
         this.resolveBindings();
         this.refreshInteractiveBoundsAndHitArea();
+        this.ensurePurchasedListUI();
         this.wireEvents();
         this.refreshShopUI();
     }
@@ -229,6 +245,7 @@ export class ShopPanel extends Component {
         this.itemDB = itemDB;
         this.resolveBindings();
         this.refreshInteractiveBoundsAndHitArea();
+        this.ensurePurchasedListUI();
         this.wireEvents();
         this.refreshShopUI();
     }
@@ -243,6 +260,7 @@ export class ShopPanel extends Component {
     public start(): void {
         this.resolveBindings();
         this.refreshInteractiveBoundsAndHitArea();
+        this.ensurePurchasedListUI();
         this.wireEvents();
         this.refreshShopUI();
     }
@@ -283,6 +301,60 @@ export class ShopPanel extends Component {
         this.collectInteractiveHitNodes();
         this.walkAndDisableBlockInputEvents(this.node);
         this.tightenRootTouchBounds();
+    }
+
+    /**
+     * Ensure purchased-list UI exists and is laid out away from interactive controls.
+     */
+    private ensurePurchasedListUI(): void {
+        const listNode = this.purchasedListNode ?? this.getOrCreateRuntimePurchasedListNode();
+        if (!listNode) {
+            return;
+        }
+
+        const transform = listNode.getComponent(UITransform) ?? listNode.addComponent(UITransform);
+        this.layoutPurchasedListNode(listNode, transform);
+
+        const label = listNode.getComponent(Label) ?? listNode.addComponent(Label);
+        label.fontSize = 16;
+        label.lineHeight = 20;
+        label.color = this.textColor;
+        label.horizontalAlign = Label.HorizontalAlign.LEFT;
+        label.verticalAlign = Label.VerticalAlign.TOP;
+        label.string = 'Purchased: (none)';
+
+        this.purchasedListLabel = label;
+    }
+
+    private getOrCreateRuntimePurchasedListNode(): Node | null {
+        if (this.runtimePurchasedListNode?.isValid) {
+            return this.runtimePurchasedListNode;
+        }
+
+        const node = new Node('PurchasedList');
+        node.setPosition(0, this.slotSize + 70, 0);
+        this.node.addChild(node);
+        this.runtimePurchasedListNode = node;
+        return node;
+    }
+
+    private layoutPurchasedListNode(node: Node, transform: UITransform): void {
+        const bounds = this.computeLocalUnionBounds(this.interactiveHitNodes);
+
+        const width = Math.max(
+            220,
+            bounds ? (bounds.maxX - bounds.minX + 20) : this.slotCount * (this.slotSize + this.slotGap)
+        );
+        const lineCount = Math.max(2, this.purchasedItemCounts.size + 1);
+        const height = Math.min(200, Math.max(56, lineCount * 20 + 10));
+
+        transform.setContentSize(width, height);
+
+        const y = bounds
+            ? bounds.maxY + height * 0.5 + 16
+            : this.slotSize + height * 0.5 + 24;
+
+        node.setPosition(0, y, 0);
     }
 
     /**
@@ -759,9 +831,12 @@ export class ShopPanel extends Component {
             return false;
         }
 
+        const templateId = slot.templateId;
+
         if (this.onBuyCallback) {
             const success = this.onBuyCallback(slotIndex);
             if (success) {
+                this.recordPurchasedItem(templateId);
                 this.refreshShopUI();
                 return true;
             }
@@ -822,9 +897,13 @@ export class ShopPanel extends Component {
      * Refresh entire shop UI
      */
     public refreshShopUI(): void {
+        this.ensurePurchasedListUI();
+        this.syncPurchasedListByDay();
+
         this.updateGoldDisplay();
         this.updateRefreshDisplay();
         this.updateAllSlots();
+        this.updatePurchasedListDisplay();
     }
 
     /**
@@ -879,6 +958,54 @@ export class ShopPanel extends Component {
         for (let i = 0; i < this.slotCount; i++) {
             this.updateSlot(i);
         }
+    }
+
+    private syncPurchasedListByDay(): void {
+        const day = this.gameLoop?.getDay();
+        if (day === undefined || day === null) {
+            return;
+        }
+
+        if (this.lastKnownDay < 0) {
+            this.lastKnownDay = day;
+            return;
+        }
+
+        if (day !== this.lastKnownDay) {
+            this.purchasedItemCounts.clear();
+            this.lastKnownDay = day;
+            console.log(`[ShopPanel] Day changed to ${day}, cleared purchased list`);
+        }
+    }
+
+    private recordPurchasedItem(templateId: string): void {
+        if (!templateId) {
+            return;
+        }
+
+        const current = this.purchasedItemCounts.get(templateId) ?? 0;
+        this.purchasedItemCounts.set(templateId, current + 1);
+    }
+
+    private updatePurchasedListDisplay(): void {
+        this.ensurePurchasedListUI();
+
+        if (!this.purchasedListLabel) {
+            return;
+        }
+
+        if (this.purchasedItemCounts.size === 0) {
+            this.purchasedListLabel.string = 'Purchased: (none)';
+            return;
+        }
+
+        const lines = ['Purchased:'];
+        for (const [templateId, count] of this.purchasedItemCounts.entries()) {
+            const itemName = this.itemDB?.getTemplate(templateId)?.name ?? templateId;
+            lines.push(`${itemName} × ${count}`);
+        }
+
+        this.purchasedListLabel.string = lines.join('\n');
     }
 
     /**
@@ -1040,6 +1167,15 @@ export class ShopPanel extends Component {
     public onDestroy(): void {
         this.runtimeSlotNodes.forEach(node => node.destroy());
         this.runtimeSlotNodes.clear();
+
+        if (this.runtimePurchasedListNode?.isValid) {
+            this.runtimePurchasedListNode.destroy();
+        }
+        this.runtimePurchasedListNode = null;
+        this.purchasedListLabel = null;
+        this.purchasedItemCounts.clear();
+        this.lastKnownDay = -1;
+
         this.slotBindings = [];
         this.interactiveHitNodes = [];
         this.dragTouchStartPos = null;
