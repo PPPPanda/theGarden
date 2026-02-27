@@ -182,8 +182,10 @@ export type TimelineEventType =
 export interface ITimelineEvent {
     time: number;                 // 触发时间（秒）
     type: TimelineEventType;     // 事件类型
-    itemId?: string;             // 关联物品
-    target: 'player' | 'enemy';  // 目标
+    itemId?: string;             // 关联物品（兼容旧字段）
+    sourceId?: string;           // 出手方物品ID
+    sourceSide?: 'player' | 'enemy'; // 出手方（可选，用于区分target语义）
+    target: 'player' | 'enemy';  // 受击方/目标
     value: number;               // 事件数值
     description: string;         // 描述
 }

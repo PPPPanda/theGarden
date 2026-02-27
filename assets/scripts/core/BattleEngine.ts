@@ -117,6 +117,8 @@ export class BattleEngine {
                     time: this.currentTime,
                     type: 'item_trigger',
                     itemId: item.id,
+                    sourceId: item.id,
+                    sourceSide: side,
                     target: side === 'player' ? 'enemy' : 'player',
                     value: effect.value,
                     description: `${item.name} triggers ${effect.type} at battle start`
@@ -201,11 +203,13 @@ export class BattleEngine {
             return null;
         }
 
-        // Create timeline event
+        // Create timeline event with explicit source info
         const event: ITimelineEvent = {
             time: this.currentTime,
             type: 'item_trigger',
             itemId: entry.itemId,
+            sourceId: entry.itemId,
+            sourceSide: entry.side,
             target: entry.side === 'player' ? 'enemy' : 'player',
             value: entry.effects[0]?.value ?? 0,
             description: `Item ${entry.itemId} triggers`
@@ -409,15 +413,23 @@ export class BattleEngine {
 
     /**
      * Resolve a timeline event - execute all effects
+     * Uses sourceId/sourceSide to find the triggering item,
+     * applies effects to target.
      */
     public resolveEvent(event: ITimelineEvent): void {
-        const item = event.target === 'player'
-            ? this.playerItems.find(i => i.id === event.itemId)
-            : this.enemyItems.find(i => i.id === event.itemId);
+        // Use sourceId to find the triggering item
+        const lookupId = event.sourceId ?? event.itemId;
+        const sourceSide = event.sourceSide ?? (event.target === 'player' ? 'enemy' : 'player');
         
-        if (!item) return;
+        const item = sourceSide === 'player'
+            ? this.playerItems.find(i => i.id === lookupId)
+            : this.enemyItems.find(i => i.id === lookupId);
+        
+        if (!item) {
+            console.warn(`[BattleEngine] resolveEvent: item not found for sourceId=${lookupId}, sourceSide=${sourceSide}`);
+            return;
+        }
 
-        const sourceSide = event.target === 'player' ? 'enemy' : 'player';
         const targetSide = event.target;
 
         for (const effect of item.effects) {
