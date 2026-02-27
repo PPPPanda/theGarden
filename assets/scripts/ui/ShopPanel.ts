@@ -453,6 +453,7 @@ export class ShopPanel extends Component {
         const height = Math.max(1, halfH * 2 + this.hitPadding * 2);
 
         rootTransform.setContentSize(width, height);
+        this.avoidFlowControlsOverlap(rootTransform);
 
         if (!this.hasLoggedHitBoundsDiagnostics) {
             const world = rootTransform.getBoundingBoxToWorld();
@@ -464,6 +465,69 @@ export class ShopPanel extends Component {
             );
             this.hasLoggedHitBoundsDiagnostics = true;
         }
+    }
+
+    /**
+     * Keep ShopPanel hit area away from FlowControls to avoid accidental interception.
+     */
+    private avoidFlowControlsOverlap(rootTransform: UITransform): void {
+        const parent = this.node.parent;
+        if (!parent) {
+            return;
+        }
+
+        const flowControls = parent.getChildByName('FlowControls');
+        if (!flowControls) {
+            return;
+        }
+
+        let flowBounds: { x: number; y: number; width: number; height: number } | null = null;
+        for (const child of flowControls.children) {
+            const tr = child.getComponent(UITransform);
+            if (!tr) {
+                continue;
+            }
+            const box = tr.getBoundingBoxToWorld();
+            if (!flowBounds) {
+                flowBounds = box;
+                continue;
+            }
+
+            const minX = Math.min(flowBounds.x, box.x);
+            const minY = Math.min(flowBounds.y, box.y);
+            const maxX = Math.max(flowBounds.x + flowBounds.width, box.x + box.width);
+            const maxY = Math.max(flowBounds.y + flowBounds.height, box.y + box.height);
+            flowBounds = {
+                x: minX,
+                y: minY,
+                width: maxX - minX,
+                height: maxY - minY,
+            };
+        }
+
+        if (!flowBounds) {
+            return;
+        }
+
+        const shopBounds = rootTransform.getBoundingBoxToWorld();
+        const intersects = !(shopBounds.x + shopBounds.width < flowBounds.x
+            || flowBounds.x + flowBounds.width < shopBounds.x
+            || shopBounds.y + shopBounds.height < flowBounds.y
+            || flowBounds.y + flowBounds.height < shopBounds.y);
+
+        if (!intersects) {
+            return;
+        }
+
+        const overlapY = (flowBounds.y + flowBounds.height) - shopBounds.y;
+        if (overlapY <= 0) {
+            return;
+        }
+
+        const shift = overlapY + 8;
+        const pos = this.node.position;
+        this.node.setPosition(pos.x, pos.y + shift, pos.z);
+        console.warn(`[ShopPanel] Adjusted root position by +${shift.toFixed(1)} to avoid FlowControls overlap`);
     }
 
     private computeLocalUnionBounds(nodes: Node[]): Bounds2D | null {
