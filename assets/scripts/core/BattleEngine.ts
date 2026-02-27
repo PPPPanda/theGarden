@@ -614,9 +614,14 @@ export class BattleEngine {
             }
 
             const nextTime = nextTimes.get(item.id);
-            item.currentCooldown = nextTime === undefined
-                ? 0
-                : Math.max(0, nextTime - this.currentTime);
+            if (nextTime === undefined) {
+                item.currentCooldown = 0;
+                continue;
+            }
+
+            const remaining = Math.max(0, nextTime - this.currentTime);
+            // Treat near-immediate triggers as ready (UI-friendly clamp to 0).
+            item.currentCooldown = remaining <= MIN_EVENT_INTERVAL ? 0 : remaining;
         }
     }
 
