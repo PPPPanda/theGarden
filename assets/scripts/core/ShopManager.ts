@@ -39,7 +39,7 @@ export class ShopManager {
      */
     private createInitialShopState(): IShopState {
         return {
-            slots: this.generateShopSlots(),
+            slots: this.generateShopSlots(this.currentDay),
             refreshCost: BASE_REFRESH_COST,
             refreshCount: 0
         };
