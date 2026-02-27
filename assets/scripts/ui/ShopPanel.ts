@@ -275,12 +275,18 @@ export class ShopPanel extends Component {
     }
 
     public onEnable(): void {
-        // Recompute bounds after any runtime layout/application-stage activation.
+        // Recompute bounds after runtime activation and after delayed layout settle.
+        this.scheduleHitAreaRecalc('onEnable-immediate', 0);
+        this.scheduleHitAreaRecalc('onEnable-delayed', 0.2);
+    }
+
+    private scheduleHitAreaRecalc(reason: string, delay: number): void {
         this.scheduleOnce(() => {
             this.resolveBindings();
             this.refreshInteractiveBoundsAndHitArea();
             this.runUiRegressionGuard();
-        }, 0);
+            console.log(`[ShopPanel] Hit area recalculated (${reason})`);
+        }, delay);
     }
 
     // ============= Binding Resolution =============
