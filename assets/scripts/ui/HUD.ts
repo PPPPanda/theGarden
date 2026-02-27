@@ -233,7 +233,9 @@ export class HUD extends Component {
             const label = this.timerText.getComponent(Label);
             if (label) {
                 const timer = this.getPhaseTimer();
-                label.string = timer === null ? '' : `${timer.toFixed(1)}s`;
+                label.string = timer === null || !Number.isFinite(timer)
+                    ? ''
+                    : `${Math.max(0, timer).toFixed(1)}s`;
             }
         }
     }

@@ -46,4 +46,43 @@ describe('SceneFlowStateMachine', () => {
         expect(transition.to).toBe(SceneStage.Grid);
         expect(machine.getCurrentStage()).toBe(SceneStage.Grid);
     });
+
+    test('advance uses the same state transition channel and records deterministic chain', () => {
+        const machine = new SceneFlowStateMachine(SceneStage.Loading);
+
+        expect(machine.advance().ok).toBe(true); // loading -> shop
+        expect(machine.advance().ok).toBe(true); // shop -> grid
+        expect(machine.advance().ok).toBe(true); // grid -> battle
+        expect(machine.advance().ok).toBe(true); // battle -> result
+        expect(machine.advance().ok).toBe(true); // result -> shop
+
+        const history = machine.getHistory();
+        const chain = history.map((entry) => `${entry.from}->${entry.to}`);
+
+        expect(chain).toEqual([
+            'loading->shop',
+            'shop->grid',
+            'grid->battle',
+            'battle->result',
+            'result->shop',
+        ]);
+        expect(machine.getCurrentStage()).toBe(SceneStage.Shop);
+    });
+
+    test('failed transition does not mutate stage or append history', () => {
+        const machine = new SceneFlowStateMachine(SceneStage.Loading);
+
+        const ok = machine.transitionTo(SceneStage.Shop);
+        expect(ok.ok).toBe(true);
+
+        const beforeStage = machine.getCurrentStage();
+        const beforeHistoryLength = machine.getHistory().length;
+
+        const failed = machine.transitionTo(SceneStage.Result); // invalid from shop
+        expect(failed.ok).toBe(false);
+        expect(failed.error).toContain('Invalid transition');
+
+        expect(machine.getCurrentStage()).toBe(beforeStage);
+        expect(machine.getHistory().length).toBe(beforeHistoryLength);
+    });
 });

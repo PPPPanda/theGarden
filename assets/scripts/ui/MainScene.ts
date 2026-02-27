@@ -62,8 +62,11 @@ export class MainScene extends Component {
         this.setupBackupInputHandlers();
         
         // Auto-advance from Loading to Shop on startup
-        this.transitionToStage(SceneStage.Shop);
-        
+        const bootTransition = this.transitionToStage(SceneStage.Shop);
+        if (!bootTransition.ok) {
+            console.error('[MainScene] Failed to transition to Shop on startup');
+        }
+
         this.isInitialized = true;
     }
 
@@ -307,6 +310,7 @@ export class MainScene extends Component {
      */
     private onStageTransitionSuccess(stage: SceneStage, source: string): void {
         this.syncPhaseWithStage(stage, source);
+        this.assertStagePhaseConsistency(stage, source);
         this.applyStageVisibility(stage);
         this.refreshHudAfterStageTransition(stage, source);
     }
@@ -317,6 +321,21 @@ export class MainScene extends Component {
     private refreshHudAfterStageTransition(stage: SceneStage, source: string): void {
         this.hud?.refreshAll();
         console.log(`[MainScene] HUD refresh after stage transition (${source}): stage=${stage}, phase=${this.gameLoop.getPhase()}`);
+    }
+
+    /**
+     * Runtime assertion guard for Stage/Phase consistency.
+     */
+    private assertStagePhaseConsistency(stage: SceneStage, source: string): void {
+        const expected = this.getExpectedPhaseForStage(stage);
+        if (!expected) {
+            return;
+        }
+
+        const actual = this.gameLoop.getPhase();
+        if (actual !== expected) {
+            console.error(`[MainScene] Stage/Phase assertion failed at ${source}: stage=${stage}, expected=${expected}, actual=${actual}`);
+        }
     }
 
     /**
@@ -850,26 +869,28 @@ export class MainScene extends Component {
             console.warn('Cannot transition to Battle from current stage');
             return false;
         }
-        
+
+        // Transition through the unified stage channel first.
+        const result = this.transitionToStage(SceneStage.Battle);
+        if (!result.ok) {
+            return false;
+        }
+
         // Generate AI opponent exactly once per battle start entry
         this.gameLoop.generateAiOpponent();
         console.log('[MainScene] startBattle: generateAiOpponent() called once');
-        
+
         // Start battle in GameLoop
         this.gameLoop.startBattle();
-        
-        // Update enemy grid view
+
+        // Update enemy grid view and battle UI
         this.enemyGridView.refresh();
-        
-        // Transition to Battle stage
-        const result = this.transitionToStage(SceneStage.Battle);
-        
-        // Show battle UI
-        if (result.ok) {
-            this.showBattleStartUI();
-        }
-        
-        return result.ok;
+        this.showBattleStartUI();
+
+        // Phase/timer may have changed after battle engine creation, refresh once more.
+        this.hud?.refreshAll();
+
+        return true;
     }
 
     /**
@@ -917,18 +938,22 @@ export class MainScene extends Component {
             console.warn('Cannot transition to Shop from current stage');
             return false;
         }
-        
-        // Complete current day and start next
-        this.gameLoop.completeDay();
-        
-        // Transition to Shop for next day
+
+        // Transition through the unified stage channel first.
         const result = this.transitionToStage(SceneStage.Shop);
-        
+        if (!result.ok) {
+            return false;
+        }
+
+        // Complete current day and start next.
+        this.gameLoop.completeDay();
+
         // Refresh views
         this.playerGridView.refresh();
         this.enemyGridView.refresh();
-        
-        return result.ok;
+        this.hud?.refreshAll();
+
+        return true;
     }
 
     // ============= Legacy Compatibility =============
