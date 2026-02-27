@@ -4,7 +4,7 @@
  * All purchase/refresh/lock logic delegated via callbacks to MainScene.
  */
 
-import { _decorator, Component, Node, Label, Color, UITransform, EventTouch, Sprite, Button, CCFloat, CCInteger } from 'cc';
+import { _decorator, Component, Node, Label, Color, UITransform, EventTouch, Sprite, Button, CCFloat, CCInteger, Vec3 } from 'cc';
 import { ShopManager } from '../core/ShopManager';
 import { GameLoop } from '../core/GameLoop';
 import { ItemDB } from '../core/ItemDB';
@@ -19,6 +19,13 @@ interface SlotBinding {
     buyBtn: Node | null;
     lockBtn: Node | null;
 }
+
+type Bounds2D = {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+};
 
 @ccclass('ShopPanel')
 export class ShopPanel extends Component {
@@ -146,6 +153,12 @@ export class ShopPanel extends Component {
     /** Runtime refresh cost label ref */
     private runtimeRefreshLabel: Label | null = null;
 
+    /** Cached effective interactive nodes for hit guards */
+    private interactiveHitNodes: Node[] = [];
+
+    /** Hit padding in pixels */
+    private readonly hitPadding: number = 4;
+
     // ============= Callbacks =============
 
     private onBuyCallback: ((slotIndex: number) => boolean) | null = null;
@@ -199,6 +212,7 @@ export class ShopPanel extends Component {
         this.shopManager = gameLoop.getShopManager();
         this.itemDB = gameLoop.getItemDB();
         this.resolveBindings();
+        this.refreshInteractiveBoundsAndHitArea();
         this.wireEvents();
         this.refreshShopUI();
     }
@@ -211,6 +225,7 @@ export class ShopPanel extends Component {
         this.gameLoop = gameLoop;
         this.itemDB = itemDB;
         this.resolveBindings();
+        this.refreshInteractiveBoundsAndHitArea();
         this.wireEvents();
         this.refreshShopUI();
     }
@@ -224,6 +239,7 @@ export class ShopPanel extends Component {
 
     public start(): void {
         this.resolveBindings();
+        this.refreshInteractiveBoundsAndHitArea();
         this.wireEvents();
         this.refreshShopUI();
     }
@@ -258,6 +274,213 @@ export class ShopPanel extends Component {
     }
 
     /**
+     * Refresh interactive node cache, tighten root hit bounds, and disable input blockers.
+     */
+    private refreshInteractiveBoundsAndHitArea(): void {
+        this.collectInteractiveHitNodes();
+        this.walkAndDisableBlockInputEvents(this.node);
+        this.tightenRootTouchBounds();
+    }
+
+    /**
+     * Collect all valid interactive nodes (buy/lock/icon/refresh).
+     */
+    private collectInteractiveHitNodes(): void {
+        const nodes: Node[] = [];
+
+        for (const binding of this.slotBindings) {
+            if (binding.icon) nodes.push(binding.icon);
+            if (binding.buyBtn) nodes.push(binding.buyBtn);
+            if (binding.lockBtn) nodes.push(binding.lockBtn);
+        }
+
+        const refreshNode = this.refreshBtn ?? this.node.getChildByName('refreshBtn');
+        if (refreshNode) {
+            nodes.push(refreshNode);
+        }
+
+        this.interactiveHitNodes = nodes.filter((node, index) => nodes.indexOf(node) === index);
+    }
+
+    /**
+     * Recursively disable BlockInputEvents if present.
+     */
+    private walkAndDisableBlockInputEvents(node: Node | null): void {
+        if (!node) {
+            return;
+        }
+
+        this.disableBlockInputEvents(node);
+        for (const child of node.children) {
+            this.walkAndDisableBlockInputEvents(child);
+        }
+    }
+
+    private disableBlockInputEvents(node: Node): void {
+        const blockCompUnknown = node.getComponent('cc.BlockInputEvents') ?? node.getComponent('BlockInputEvents');
+        if (!blockCompUnknown) {
+            return;
+        }
+
+        const blockComp = blockCompUnknown as unknown as { enabled?: boolean };
+        if (typeof blockComp.enabled === 'boolean') {
+            blockComp.enabled = false;
+            console.warn(`[ShopPanel] Disabled BlockInputEvents on ${node.name}`);
+        }
+    }
+
+    /**
+     * Tighten ShopPanel root UITransform bounds to union of actual interactive controls.
+     */
+    private tightenRootTouchBounds(): void {
+        const rootTransform = this.node.getComponent(UITransform);
+        if (!rootTransform) {
+            return;
+        }
+
+        const bounds = this.computeLocalUnionBounds(this.interactiveHitNodes);
+        if (!bounds) {
+            return;
+        }
+
+        const halfW = Math.max(Math.abs(bounds.minX), Math.abs(bounds.maxX));
+        const halfH = Math.max(Math.abs(bounds.minY), Math.abs(bounds.maxY));
+        const width = Math.max(1, halfW * 2 + this.hitPadding * 2);
+        const height = Math.max(1, halfH * 2 + this.hitPadding * 2);
+
+        rootTransform.setContentSize(width, height);
+        console.log(`[ShopPanel] Tightened root touch bounds: ${width.toFixed(1)}x${height.toFixed(1)}`);
+    }
+
+    private computeLocalUnionBounds(nodes: Node[]): Bounds2D | null {
+        let minX = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        let minY = Number.POSITIVE_INFINITY;
+        let maxY = Number.NEGATIVE_INFINITY;
+
+        for (const node of nodes) {
+            const bounds = this.getNodeBoundsInRootLocal(node);
+            if (!bounds) {
+                continue;
+            }
+
+            minX = Math.min(minX, bounds.minX);
+            maxX = Math.max(maxX, bounds.maxX);
+            minY = Math.min(minY, bounds.minY);
+            maxY = Math.max(maxY, bounds.maxY);
+        }
+
+        if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+            return null;
+        }
+
+        return { minX, maxX, minY, maxY };
+    }
+
+    private getNodeBoundsInRootLocal(node: Node): Bounds2D | null {
+        const rootTransform = this.node.getComponent(UITransform);
+        const targetTransform = this.resolveHitTransform(node);
+        if (!rootTransform || !targetTransform) {
+            return null;
+        }
+
+        const box = targetTransform.getBoundingBoxToWorld();
+        const corners = [
+            new Vec3(box.x, box.y, 0),
+            new Vec3(box.x + box.width, box.y, 0),
+            new Vec3(box.x, box.y + box.height, 0),
+            new Vec3(box.x + box.width, box.y + box.height, 0),
+        ];
+
+        let minX = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        let minY = Number.POSITIVE_INFINITY;
+        let maxY = Number.NEGATIVE_INFINITY;
+
+        for (const corner of corners) {
+            const local = rootTransform.convertToNodeSpaceAR(corner);
+            minX = Math.min(minX, local.x);
+            maxX = Math.max(maxX, local.x);
+            minY = Math.min(minY, local.y);
+            maxY = Math.max(maxY, local.y);
+        }
+
+        return { minX, maxX, minY, maxY };
+    }
+
+    private extractEventWorldPosition(event: EventTouch): { x: number; y: number } | null {
+        const touchPos = event.touch?.getLocation();
+        if (touchPos) {
+            return { x: touchPos.x, y: touchPos.y };
+        }
+
+        const eventLike = event as unknown as { getUILocation?: () => { x: number; y: number } };
+        const uiPos = eventLike.getUILocation?.();
+        if (uiPos && Number.isFinite(uiPos.x) && Number.isFinite(uiPos.y)) {
+            return { x: uiPos.x, y: uiPos.y };
+        }
+
+        return null;
+    }
+
+    private isWorldPointInsideNode(node: Node | null, worldX: number, worldY: number): boolean {
+        if (!node) {
+            return false;
+        }
+
+        const transform = this.resolveHitTransform(node);
+        if (!transform) {
+            return false;
+        }
+
+        const box = transform.getBoundingBoxToWorld();
+        return worldX >= box.x - this.hitPadding
+            && worldX <= box.x + box.width + this.hitPadding
+            && worldY >= box.y - this.hitPadding
+            && worldY <= box.y + box.height + this.hitPadding;
+    }
+
+    /**
+     * Resolve best UITransform for hit-test, including button target/children fallback.
+     */
+    private resolveHitTransform(node: Node): UITransform | null {
+        const self = node.getComponent(UITransform);
+        if (self) {
+            return self;
+        }
+
+        const button = node.getComponent(Button);
+        const targetTransform = button?.target?.getComponent(UITransform);
+        if (targetTransform) {
+            return targetTransform;
+        }
+
+        for (const child of node.children) {
+            const childTransform = child.getComponent(UITransform);
+            if (childTransform) {
+                return childTransform;
+            }
+        }
+
+        return null;
+    }
+
+    private isTouchInsideInteractiveZone(event: EventTouch): boolean {
+        const pos = this.extractEventWorldPosition(event);
+        if (!pos) {
+            return false;
+        }
+
+        for (const node of this.interactiveHitNodes) {
+            if (this.isWorldPointInsideNode(node, pos.x, pos.y)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Wire button events
      */
     private wireEvents(): void {
@@ -268,7 +491,15 @@ export class ShopPanel extends Component {
 
             if (binding.buyBtn) {
                 binding.buyBtn.off(Node.EventType.TOUCH_END);
-                binding.buyBtn.on(Node.EventType.TOUCH_END, () => {
+                binding.buyBtn.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+                    const pos = this.extractEventWorldPosition(event);
+                    if (!pos || !this.isWorldPointInsideNode(binding.buyBtn, pos.x, pos.y)) {
+                        return;
+                    }
+                    if (!this.isTouchInsideInteractiveZone(event)) {
+                        return;
+                    }
+
                     console.log(`[ShopPanel] BUY touched at slot ${slotIdx}`);
                     const result = this.handleBuy(slotIdx);
                     console.log(`[ShopPanel] BUY result: ${result ? 'SUCCESS' : 'FAILED'}`);
@@ -276,7 +507,15 @@ export class ShopPanel extends Component {
             }
             if (binding.lockBtn) {
                 binding.lockBtn.off(Node.EventType.TOUCH_END);
-                binding.lockBtn.on(Node.EventType.TOUCH_END, () => {
+                binding.lockBtn.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+                    const pos = this.extractEventWorldPosition(event);
+                    if (!pos || !this.isWorldPointInsideNode(binding.lockBtn, pos.x, pos.y)) {
+                        return;
+                    }
+                    if (!this.isTouchInsideInteractiveZone(event)) {
+                        return;
+                    }
+
                     console.log(`[ShopPanel] LOCK touched at slot ${slotIdx}`);
                     const result = this.handleLock(slotIdx);
                     console.log(`[ShopPanel] LOCK result: ${result ? 'SUCCESS' : 'FAILED'}`);
@@ -290,16 +529,21 @@ export class ShopPanel extends Component {
                 binding.icon.off(EventTouch.TOUCH_END);
                 
                 binding.icon.on(EventTouch.TOUCH_START, (event: EventTouch) => {
-                    const pos = event.touch?.getLocation();
-                    if (pos) {
-                        this.dragTouchStartPos = { x: pos.x, y: pos.y };
-                        this.dragStartSlotIndex = slotIdx;
+                    const pos = this.extractEventWorldPosition(event);
+                    if (!pos || !this.isWorldPointInsideNode(binding.icon, pos.x, pos.y)) {
+                        return;
                     }
+                    if (!this.isTouchInsideInteractiveZone(event)) {
+                        return;
+                    }
+
+                    this.dragTouchStartPos = { x: pos.x, y: pos.y };
+                    this.dragStartSlotIndex = slotIdx;
                 }, this);
                 
                 binding.icon.on(EventTouch.TOUCH_MOVE, (event: EventTouch) => {
                     if (this.dragTouchStartPos && this.dragStartSlotIndex >= 0) {
-                        const pos = event.touch?.getLocation();
+                        const pos = this.extractEventWorldPosition(event);
                         if (pos) {
                             const dx = pos.x - this.dragTouchStartPos.x;
                             const dy = pos.y - this.dragTouchStartPos.y;
@@ -327,7 +571,15 @@ export class ShopPanel extends Component {
         const refreshNode = this.refreshBtn ?? this.node.getChildByName('refreshBtn');
         if (refreshNode) {
             refreshNode.off(Node.EventType.TOUCH_END);
-            refreshNode.on(Node.EventType.TOUCH_END, () => {
+            refreshNode.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+                const pos = this.extractEventWorldPosition(event);
+                if (!pos || !this.isWorldPointInsideNode(refreshNode, pos.x, pos.y)) {
+                    return;
+                }
+                if (!this.isTouchInsideInteractiveZone(event)) {
+                    return;
+                }
+
                 console.log('[ShopPanel] REFRESH touched');
                 const result = this.handleRefresh();
                 console.log(`[ShopPanel] REFRESH result: ${result ? 'SUCCESS' : 'FAILED'}`);
@@ -776,6 +1028,9 @@ export class ShopPanel extends Component {
         this.runtimeSlotNodes.forEach(node => node.destroy());
         this.runtimeSlotNodes.clear();
         this.slotBindings = [];
+        this.interactiveHitNodes = [];
+        this.dragTouchStartPos = null;
+        this.dragStartSlotIndex = -1;
         this.onBuyCallback = null;
         this.onRefreshCallback = null;
         this.onLockCallback = null;
