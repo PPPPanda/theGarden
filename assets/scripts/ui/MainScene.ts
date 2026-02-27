@@ -644,6 +644,10 @@ export class MainScene extends Component {
         const currentStage = this.getCurrentStage();
         console.log(`[MainScene] ENTER_GRID touched! Current stage: ${currentStage}`);
         
+        // Sync with GameLoop phase
+        this.gameLoop.enterGridPhase();
+        console.log('[MainScene] Synced GameLoop.enterGridPhase()');
+        
         // Call actual business method
         const success = this.enterGrid();
         console.log(`[MainScene] enterGrid() result: ${success ? 'SUCCESS' : 'FAILED'}`);
@@ -653,10 +657,8 @@ export class MainScene extends Component {
         const currentStage = this.getCurrentStage();
         console.log(`[MainScene] START_BATTLE touched! Current stage: ${currentStage}`);
         
-        // Generate AI opponent before starting battle
-        this.gameLoop.generateAiOpponent();
-        
-        // Call actual business method (includes gameLoop.startBattle())
+        // startBattle() already calls generateAiOpponent() - do not duplicate
+        // Call actual business method (includes gameLoop.startBattle() + generateAiOpponent())
         const success = this.startBattle();
         console.log(`[MainScene] startBattle() result: ${success ? 'SUCCESS' : 'FAILED'}`);
     }
