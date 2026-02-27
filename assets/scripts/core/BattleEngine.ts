@@ -433,9 +433,9 @@ export class BattleEngine {
 
         const targetSide = event.target;
         
-        // Filter effects by trigger timing - only execute OnCooldownComplete effects
+        // Filter effects by trigger timing - only execute OnCooldownComplete effects (per task requirement)
         const matchingEffects = item.effects.filter(e => 
-            e.trigger === TriggerTiming.OnCooldownComplete || e.trigger === TriggerTiming.Passive
+            e.trigger === TriggerTiming.OnCooldownComplete
         );
 
         for (const effect of matchingEffects) {
@@ -447,8 +447,24 @@ export class BattleEngine {
                     this.applyHeal(targetSide, effect.value);
                     break;
                 case 'buff':
-                    // Dispatch buff to correct status type based on params
-                    const buffType = (effect.params?.statusType as StatusEffectType) ?? StatusEffectType.Shield;
+                    // Validate and dispatch buff to correct status type based on params
+                    const rawBuffType = effect.params?.statusType as string;
+                    const validTypes: Record<string, StatusEffectType> = {
+                        'shield': StatusEffectType.Shield,
+                        'haste': StatusEffectType.Haste,
+                        'freeze': StatusEffectType.Freeze,
+                        'slow': StatusEffectType.Slow,
+                        'regen': StatusEffectType.Regen,
+                        'charge': StatusEffectType.Charge,
+                        'burn': StatusEffectType.Burn,
+                        'poison': StatusEffectType.Poison,
+                    };
+                    const buffType = rawBuffType && validTypes[rawBuffType] 
+                        ? validTypes[rawBuffType] 
+                        : StatusEffectType.Shield;
+                    if (!rawBuffType || !validTypes[rawBuffType]) {
+                        console.warn(`[BattleEngine] Unknown buff statusType: '${rawBuffType}', defaulting to Shield`);
+                    }
                     this.addStatusEffect(sourceSide, {
                         type: buffType,
                         duration: (effect.params?.duration as number) ?? 5,
