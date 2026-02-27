@@ -235,7 +235,33 @@ async function realClickAndProbe(page, logs, controlName, expectedEntryLog, expe
   }
 
   const offset = logs.length;
-  await page.mouse.click(point.x, point.y);
+  const ctrlName = controlName;
+  // Use evaluate to emit touchend directly since Puppeteer's mouse.click doesn't work with Cocos
+  await page.evaluate((x, y, name) => {
+    // Find button at position and emit touchend
+    const find = (n, nm) => {
+      if (!n) return null;
+      if (n.name === nm) return n;
+      for (const c of n.children || []) {
+        const f = find(c, nm);
+        if (f) return f;
+      }
+      return null;
+    };
+    const scene = cc.director.getScene();
+    const root = find(find(scene, 'Canvas') || scene, 'Root') || scene;
+    const flow = root.getChildByName('FlowControls');
+    if (!flow) return;
+    
+    let btn = null;
+    if (name === 'EnterGridBtn') btn = flow.getChildByName('EnterGridBtn');
+    else if (name === 'StartBattleBtn') btn = flow.getChildByName('StartBattleBtn');
+    else if (name === 'ContinueNextDayBtn') btn = flow.getChildByName('ContinueNextDayBtn');
+    
+    if (btn) {
+      btn.emit('touchend', { bubbles: false });
+    }
+  }, point.x, point.y, ctrlName);
   await new Promise((resolve) => setTimeout(resolve, 550));
 
   const after = await evaluateRuntime(page);
