@@ -274,12 +274,11 @@ export class MainScene extends Component {
      */
     public transitionToStage(targetStage: SceneStage, context: Record<string, unknown> = {}): SceneTransitionResult {
         const result = this.stageMachine.transitionTo(targetStage, context);
-        
+
         if (result.ok) {
-            this.applyStageVisibility(targetStage);
-            this.syncPhaseWithStage(targetStage, 'transitionToStage');
+            this.onStageTransitionSuccess(targetStage, 'transitionToStage');
         }
-        
+
         return result;
     }
 
@@ -288,11 +287,11 @@ export class MainScene extends Component {
      */
     public advanceToNextStage(context: Record<string, unknown> = {}): SceneTransitionResult {
         const result = this.stageMachine.advance(context);
-        
+
         if (result.ok && result.transition) {
-            this.applyStageVisibility(result.transition.to);
+            this.onStageTransitionSuccess(result.transition.to, 'advanceToNextStage');
         }
-        
+
         return result;
     }
 
@@ -301,6 +300,14 @@ export class MainScene extends Component {
      */
     public canTransitionTo(targetStage: SceneStage): boolean {
         return this.stageMachine.canTransition(targetStage);
+    }
+
+    /**
+     * Unified success hook for SceneStage transitions.
+     */
+    private onStageTransitionSuccess(stage: SceneStage, source: string): void {
+        this.syncPhaseWithStage(stage, source);
+        this.applyStageVisibility(stage);
     }
 
     /**
@@ -821,10 +828,6 @@ export class MainScene extends Component {
             console.warn('Cannot transition to Grid from current stage');
             return false;
         }
-        
-        // Sync GameLoop phase
-        this.gameLoop.enterGridPhase();
-        console.log('[MainScene] Synced GameLoop.enterGridPhase()');
         
         const result = this.transitionToStage(SceneStage.Grid);
         console.log(`[MainScene] enterGrid() stage transition: ${result.ok ? 'SUCCESS' : 'FAILED'}`);
