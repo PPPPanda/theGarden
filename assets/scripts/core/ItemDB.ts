@@ -81,11 +81,61 @@ export class ItemDB {
     }
 
     /**
-     * Random item pool with weighted probability
+     * Get available rarities for a given day (per architecture spec)
+     * Day 1-3: Common only
+     * Day 4-6: Common + Uncommon
+     * Day 7-9: Common + Uncommon + Rare
+     * Day 10-12: Common + Uncommon + Rare + Epic
+     * Day 13+: All rarities including Legendary
+     */
+    public getAvailableRaritiesForDay(day: number): ItemRarity[] {
+        if (day <= 3) {
+            return [ItemRarity.Common];
+        } else if (day <= 6) {
+            return [ItemRarity.Common, ItemRarity.Uncommon];
+        } else if (day <= 9) {
+            return [ItemRarity.Common, ItemRarity.Uncommon, ItemRarity.Rare];
+        } else if (day <= 12) {
+            return [ItemRarity.Common, ItemRarity.Uncommon, ItemRarity.Rare, ItemRarity.Epic];
+        } else {
+            // Day 13+: all rarities including Legendary
+            return [ItemRarity.Common, ItemRarity.Uncommon, ItemRarity.Rare, ItemRarity.Epic, ItemRarity.Legendary];
+        }
+    }
+
+    /**
+     * Get all items available for a given day (filtered by rarity)
+     */
+    public getAvailableByDay(day: number): IItemTemplate[] {
+        const validDay = Math.max(1, Math.floor(day)); // Ensure positive integer
+        const rarities = this.getAvailableRaritiesForDay(validDay);
+        return this.getAllTemplates().filter(item => 
+            rarities.includes(item.rarity as ItemRarity)
+        );
+    }
+
+    /**
+     * Random item pool with weighted probability (legacy - uses all items)
      */
     public randomPool(count: number, seed?: number): IItemTemplate[] {
+        return this.randomPoolByDay(count, 1, seed); // Default to Day 1 for backward compatibility
+    }
+
+    /**
+     * Random item pool filtered by day (new method)
+     * @param count Number of items to return
+     * @param day Day number for rarity filtering
+     * @param seed Optional random seed
+     */
+    public randomPoolByDay(count: number, day: number, seed?: number): IItemTemplate[] {
         const rng = seed !== undefined ? new SeededRandom(seed) : this.random;
-        const templates = this.getAllTemplates();
+        const templates = this.getAvailableByDay(day);
+        
+        if (templates.length === 0) {
+            console.warn(`[ItemDB] No items available for day ${day}, falling back to all items`);
+            return this.randomPool(count, seed);
+        }
+        
         const result: IItemTemplate[] = [];
 
         for (let i = 0; i < count; i++) {
