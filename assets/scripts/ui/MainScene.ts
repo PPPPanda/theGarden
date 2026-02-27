@@ -806,7 +806,12 @@ export class MainScene extends Component {
             return false;
         }
         
+        // Sync GameLoop phase
+        this.gameLoop.enterGridPhase();
+        console.log('[MainScene] Synced GameLoop.enterGridPhase()');
+        
         const result = this.transitionToStage(SceneStage.Grid);
+        console.log(`[MainScene] enterGrid() stage transition: ${result.ok ? 'SUCCESS' : 'FAILED'}`);
         return result.ok;
     }
 
@@ -842,21 +847,38 @@ export class MainScene extends Component {
     /**
      * Finish battle and show results (called when battle ends)
      */
+    /**
+     * Finish battle and transition to Result stage
+     * Runs full battle to ensure battle result is computed
+     */
     public finishBattle(): boolean {
-        // Battle auto-transitions to Result when finished
-        // This method explicitly triggers the Result stage
-        
         const current = this.getCurrentStage();
         if (current !== SceneStage.Battle) {
             console.warn('Cannot finish battle - not in Battle stage');
             return false;
         }
         
+        // Run full battle to compute result (this processes battle and sets battleResult)
+        console.log('[MainScene] Running full battle to compute result...');
+        const battleState = this.gameLoop.runFullBattle();
+        
+        if (!battleState) {
+            console.warn('[MainScene] runFullBattle returned null');
+        } else {
+            console.log(`[MainScene] Battle result: ${battleState.result}`);
+        }
+        
+        // Now transition to Result stage with computed result
         const result = this.transitionToStage(SceneStage.Result);
+        console.log(`[MainScene] finishBattle() transition: ${result.ok ? 'SUCCESS' : 'FAILED'}`);
         
         // Update views after battle
         this.playerGridView.refresh();
         this.enemyGridView.refresh();
+        
+        // Verify battle result is available
+        const battleResult = this.gameLoop.getBattleResult();
+        console.log(`[MainScene] getBattleResult() available: ${battleResult !== null}`);
         
         return result.ok;
     }
