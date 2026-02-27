@@ -313,6 +313,7 @@ export class MainScene extends Component {
         this.assertStagePhaseConsistency(stage, source);
         this.applyStageVisibility(stage);
         this.refreshHudAfterStageTransition(stage, source);
+        this.logUiClosureCheckpoint(stage, source);
     }
 
     /**
@@ -321,6 +322,28 @@ export class MainScene extends Component {
     private refreshHudAfterStageTransition(stage: SceneStage, source: string): void {
         this.hud?.refreshAll();
         console.log(`[MainScene] HUD refresh after stage transition (${source}): stage=${stage}, phase=${this.gameLoop.getPhase()}`);
+    }
+
+    /**
+     * Final UI closure checkpoint log for anti-regression.
+     */
+    private logUiClosureCheckpoint(stage: SceneStage, source: string): void {
+        const phase = this.gameLoop.getPhase();
+        const day = this.gameLoop.getDay();
+
+        if (stage !== SceneStage.Shop || !this.shopPanel) {
+            console.log(`[MainScene] UI_CLOSURE_CHECK (${source}) stage=${stage} phase=${phase} day=${day}`);
+            return;
+        }
+
+        const healthy = this.shopPanel.isUiRegressionHealthy();
+        const issues = this.shopPanel.getUiRegressionIssues();
+
+        if (healthy) {
+            console.log(`[MainScene] UI_CLOSURE_CHECK (${source}) PASS stage=${stage} phase=${phase} day=${day}`);
+        } else {
+            console.warn(`[MainScene] UI_CLOSURE_CHECK (${source}) WARN stage=${stage} phase=${phase} day=${day} issues=${issues.join(' | ')}`);
+        }
     }
 
     /**
@@ -858,6 +881,9 @@ export class MainScene extends Component {
         
         const result = this.transitionToStage(SceneStage.Grid);
         console.log(`[MainScene] enterGrid() stage transition: ${result.ok ? 'SUCCESS' : 'FAILED'}`);
+        if (result.ok) {
+            console.log('[MainScene] UI_FLOW shop->grid checkpoint PASS');
+        }
         return result.ok;
     }
 
@@ -889,6 +915,7 @@ export class MainScene extends Component {
 
         // Phase/timer may have changed after battle engine creation, refresh once more.
         this.hud?.refreshAll();
+        console.log('[MainScene] UI_FLOW grid->battle checkpoint PASS');
 
         return true;
     }
@@ -927,6 +954,10 @@ export class MainScene extends Component {
         this.playerGridView.refresh();
         this.enemyGridView.refresh();
 
+        if (result.ok) {
+            console.log('[MainScene] UI_FLOW battle->result checkpoint PASS');
+        }
+
         return result.ok;
     }
 
@@ -952,6 +983,7 @@ export class MainScene extends Component {
         this.playerGridView.refresh();
         this.enemyGridView.refresh();
         this.hud?.refreshAll();
+        console.log('[MainScene] UI_FLOW result->shop(nextDay) checkpoint PASS');
 
         return true;
     }

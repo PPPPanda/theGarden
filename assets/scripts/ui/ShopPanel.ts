@@ -180,6 +180,12 @@ export class ShopPanel extends Component {
     /** One-shot cleanup flag for placeholder label leakage */
     private hasClearedPlaceholderLabels: boolean = false;
 
+    /** One-shot snapshot logging for UI regression guard */
+    private hasLoggedUiRegressionSnapshot: boolean = false;
+
+    /** Last UI regression guard issues (empty when healthy) */
+    private uiRegressionIssues: string[] = [];
+
     // ============= Callbacks =============
 
     private onBuyCallback: ((slotIndex: number) => boolean) | null = null;
@@ -935,6 +941,7 @@ export class ShopPanel extends Component {
         this.updateRefreshDisplay();
         this.updateAllSlots();
         this.updatePurchasedListDisplay();
+        this.runUiRegressionGuard();
     }
 
     /**
@@ -1040,6 +1047,126 @@ export class ShopPanel extends Component {
         }
 
         this.purchasedListLabel.string = lines.join('\n');
+    }
+
+    /**
+     * Runtime regression guard for UI closure:
+     * touch-hit containment + purchased-list + icon fill + semantic labels.
+     */
+    private runUiRegressionGuard(): void {
+        const issues: string[] = [];
+
+        if (!this.checkTouchContainment()) {
+            issues.push('touch containment overlap with FlowControls');
+        }
+
+        if (!this.purchasedListLabel || this.purchasedListLabel.string.length === 0) {
+            issues.push('purchased list label missing/empty');
+        }
+
+        let hasRenderableSlot = false;
+
+        for (let i = 0; i < this.slotCount; i++) {
+            const slot = this.shopManager?.getSlot(i);
+            const binding = this.slotBindings[i];
+            if (!slot || !binding?.icon) {
+                continue;
+            }
+
+            hasRenderableSlot = true;
+
+            const fillGraphics = binding.icon.getChildByName('_iconFill')?.getComponent(Graphics);
+            if (!fillGraphics) {
+                issues.push(`slot${i}: icon fill missing`);
+                continue;
+            }
+
+            const iconLabel = this.resolveIconLabel(binding.icon);
+            const priceLabel = binding.price ? this.resolveNodeLabel(binding.price, '_priceLabel') : null;
+            const iconText = iconLabel?.string ?? '';
+            const priceText = priceLabel?.string ?? '';
+
+            if (iconText === 'Label' || priceText === 'Label') {
+                issues.push(`slot${i}: placeholder Label leakage`);
+            }
+
+            const templateName = this.itemDB?.getTemplate(slot.templateId)?.name?.trim() || 'Unknown Item';
+            const semanticText = `${iconText}|${priceText}`;
+
+            if (slot.purchased) {
+                if (!semanticText.includes('Sold')) {
+                    issues.push(`slot${i}: missing Sold text`);
+                }
+            } else if (slot.locked) {
+                if (!semanticText.includes('Locked')) {
+                    issues.push(`slot${i}: missing Locked text`);
+                }
+            } else {
+                if (!semanticText.includes(templateName)) {
+                    issues.push(`slot${i}: missing template name`);
+                }
+            }
+        }
+
+        if (!hasRenderableSlot) {
+            issues.push('no renderable shop slots found');
+        }
+
+        this.uiRegressionIssues = issues;
+
+        if (issues.length === 0) {
+            if (!this.hasLoggedUiRegressionSnapshot) {
+                this.hasLoggedUiRegressionSnapshot = true;
+                console.log('[ShopPanel] UI_REGRESSION_GUARD PASS touch/list/fill/text all healthy');
+            }
+            return;
+        }
+
+        console.warn(`[ShopPanel] UI_REGRESSION_GUARD WARN: ${issues.join('; ')}`);
+    }
+
+    private checkTouchContainment(): boolean {
+        const parent = this.node.parent;
+        if (!parent) {
+            return true;
+        }
+
+        const flowControls = parent.getChildByName('FlowControls');
+        const rootTransform = this.node.getComponent(UITransform);
+        if (!flowControls || !rootTransform) {
+            return true;
+        }
+
+        const rootBox = rootTransform.getBoundingBoxToWorld();
+        const refreshNode = this.refreshBtn ?? this.node.getChildByName('refreshBtn');
+        const refreshBox = refreshNode?.getComponent(UITransform)?.getBoundingBoxToWorld() ?? null;
+
+        const targetButtons = ['EnterGridBtn', 'StartBattleBtn', 'ContinueNextDayBtn'];
+        for (const buttonName of targetButtons) {
+            const btn = flowControls.getChildByName(buttonName);
+            const btnTransform = btn?.getComponent(UITransform);
+            if (!btnTransform) {
+                continue;
+            }
+
+            const box = btnTransform.getBoundingBoxToWorld();
+            const intersectsRoot = this.isRectOverlap(rootBox, box);
+            const intersectsRefresh = refreshBox ? this.isRectOverlap(refreshBox, box) : false;
+            if (intersectsRoot || intersectsRefresh) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private isRectOverlap(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): boolean {
+        return !(
+            a.x + a.width < b.x ||
+            b.x + b.width < a.x ||
+            a.y + a.height < b.y ||
+            b.y + b.height < a.y
+        );
     }
 
     /**
@@ -1318,6 +1445,20 @@ export class ShopPanel extends Component {
     }
 
     /**
+     * Get latest UI regression guard issues.
+     */
+    public getUiRegressionIssues(): string[] {
+        return [...this.uiRegressionIssues];
+    }
+
+    /**
+     * Whether UI regression guard currently reports healthy state.
+     */
+    public isUiRegressionHealthy(): boolean {
+        return this.uiRegressionIssues.length === 0;
+    }
+
+    /**
      * Get shop manager reference
      */
     public getShopManager(): ShopManager | null {
@@ -1351,6 +1492,8 @@ export class ShopPanel extends Component {
         this.dragStartSlotIndex = -1;
         this.hasLoggedHitBoundsDiagnostics = false;
         this.hasClearedPlaceholderLabels = false;
+        this.hasLoggedUiRegressionSnapshot = false;
+        this.uiRegressionIssues = [];
         this.onBuyCallback = null;
         this.onRefreshCallback = null;
         this.onLockCallback = null;
