@@ -177,6 +177,9 @@ export class ShopPanel extends Component {
     /** One-shot diagnostics flag for hit bounds logging */
     private hasLoggedHitBoundsDiagnostics: boolean = false;
 
+    /** One-shot cleanup flag for placeholder label leakage */
+    private hasClearedPlaceholderLabels: boolean = false;
+
     // ============= Callbacks =============
 
     private onBuyCallback: ((slotIndex: number) => boolean) | null = null;
@@ -891,12 +894,38 @@ export class ShopPanel extends Component {
         return true;
     }
 
+    private clearPlaceholderLabelsIfNeeded(): void {
+        if (this.hasClearedPlaceholderLabels) {
+            return;
+        }
+
+        let cleared = 0;
+        const walk = (node: Node): void => {
+            const label = node.getComponent(Label);
+            if (label && label.string === 'Label') {
+                label.string = '';
+                cleared += 1;
+            }
+            for (const child of node.children) {
+                walk(child);
+            }
+        };
+
+        walk(this.node);
+        this.hasClearedPlaceholderLabels = true;
+
+        if (cleared > 0) {
+            console.log(`[ShopPanel] Cleared ${cleared} placeholder label(s)`);
+        }
+    }
+
     // ============= Display Refresh =============
 
     /**
      * Refresh entire shop UI
      */
     public refreshShopUI(): void {
+        this.clearPlaceholderLabelsIfNeeded();
         this.ensurePurchasedListUI();
         this.syncPurchasedListByDay();
 
@@ -937,10 +966,13 @@ export class ShopPanel extends Component {
         // Prefer bound refresh node label
         const refreshNode = this.refreshBtn;
         if (refreshNode) {
-            const labelNode = refreshNode.getChildByName('label');
-            const label = labelNode?.getComponent(Label);
+            const labelNode = refreshNode.getChildByName('label')
+                ?? refreshNode.getChildByName('RefreshLabel')
+                ?? refreshNode;
+            const label = this.resolveNodeLabel(labelNode, '_refreshLabel');
             if (label) {
                 label.string = `Refresh: ${cost}g`;
+                label.color = this.textColor;
             }
             return;
         }
@@ -1010,21 +1042,26 @@ export class ShopPanel extends Component {
 
     /**
      * Resolve or create a Label component on the given icon node.
-     * Scene Icon nodes may have cc.Sprite (no Label). In that case,
-     * create a child node with a Label for text-based (emoji) display.
      */
     private resolveIconLabel(iconNode: Node): Label | null {
         // Prefer existing Label on the node itself
         let label = iconNode.getComponent(Label);
-        if (label) return label;
+        if (label) {
+            this.applySlotTextStyle(label, false);
+            return label;
+        }
 
         // Check for previously-created child label
         let child = iconNode.getChildByName('_iconLabel');
         if (child) {
-            return child.getComponent(Label);
+            label = child.getComponent(Label);
+            if (label) {
+                this.applySlotTextStyle(label, false);
+            }
+            return label;
         }
 
-        // Create a child Label (Sprite stays for future texture-based icons)
+        // Create a child Label (Sprite stays for icon fill layer)
         child = new Node('_iconLabel');
         const transform = child.addComponent(UITransform);
         const parentTransform = iconNode.getComponent(UITransform);
@@ -1034,11 +1071,48 @@ export class ShopPanel extends Component {
             transform.setContentSize(56, 56);
         }
         label = child.addComponent(Label);
-        label.fontSize = Math.floor(this.slotSize * 0.45);
-        label.horizontalAlign = Label.HorizontalAlign.CENTER;
-        label.verticalAlign = Label.VerticalAlign.CENTER;
+        this.applySlotTextStyle(label, false);
         iconNode.addChild(child);
         return label;
+    }
+
+    private resolveNodeLabel(container: Node, childName: string): Label | null {
+        let label = container.getComponent(Label);
+        if (label) {
+            this.applySlotTextStyle(label, true);
+            return label;
+        }
+
+        let child = container.getChildByName(childName);
+        if (!child) {
+            child = new Node(childName);
+            const childTransform = child.addComponent(UITransform);
+            const parentTransform = container.getComponent(UITransform);
+            if (parentTransform) {
+                childTransform.setContentSize(parentTransform.contentSize);
+            } else {
+                childTransform.setContentSize(80, 24);
+            }
+            child.setPosition(0, 0, 0);
+            container.addChild(child);
+        }
+
+        label = child.getComponent(Label) ?? child.addComponent(Label);
+        this.applySlotTextStyle(label, true);
+        return label;
+    }
+
+    private applySlotTextStyle(label: Label, compact: boolean): void {
+        label.fontSize = compact ? 14 : 15;
+        label.lineHeight = compact ? 16 : 18;
+        label.horizontalAlign = Label.HorizontalAlign.CENTER;
+        label.verticalAlign = Label.VerticalAlign.CENTER;
+        label.color = this.textColor;
+
+        // Prevent default placeholder leakage from uninitialized scene labels.
+        if (label.string === 'Label') {
+            label.string = '';
+        }
     }
 
     private resolveIconFillGraphics(iconNode: Node): Graphics | null {
@@ -1140,44 +1214,50 @@ export class ShopPanel extends Component {
         // Get template info for icon/color
         const template = this.itemDB?.getTemplate(slot.templateId);
 
-        // Update icon (works with both Label-only and Sprite+child-Label nodes)
+        const templateName = template?.name?.trim() || 'Unknown Item';
+
+        // Update icon (text semantics + fill)
         if (binding.icon) {
             this.drawIconFill(binding.icon, template, slot);
 
             const label = this.resolveIconLabel(binding.icon);
             if (label) {
                 if (slot.purchased) {
-                    label.string = '✓';
-                    label.color = new Color(220, 220, 220, 255);
-                } else if (template?.emoji) {
-                    label.string = template.emoji;
-                    label.color = this.textColor;
+                    label.string = 'Sold';
+                    label.color = this.purchasedColor;
+                } else if (slot.locked) {
+                    label.string = 'Locked';
+                    label.color = this.lockedColor;
                 } else {
-                    label.string = '?';
+                    label.string = templateName;
                     label.color = this.textColor;
                 }
             }
         }
 
-        // Update price
+        // Update price/status line
         if (binding.price) {
-            const label = binding.price.getComponent(Label);
+            const label = this.resolveNodeLabel(binding.price, '_priceLabel');
             if (label) {
                 if (slot.purchased) {
-                    label.string = 'SOLD';
+                    label.string = 'Sold';
                     label.color = this.purchasedColor;
+                } else if (slot.locked) {
+                    label.string = 'Locked';
+                    label.color = this.lockedColor;
                 } else {
-                    label.string = `${slot.price}g`;
-                    label.color = this.goldColor;
+                    label.string = templateName;
+                    label.color = this.textColor;
                 }
             }
         }
 
         // Update lock button visual
         if (binding.lockBtn) {
-            const label = binding.lockBtn.getComponent(Label);
+            const label = this.resolveNodeLabel(binding.lockBtn, '_lockLabel');
             if (label) {
                 label.string = slot.locked ? '🔒' : '🔓';
+                label.color = slot.locked ? this.lockedColor : this.textColor;
             }
         }
 
@@ -1219,7 +1299,7 @@ export class ShopPanel extends Component {
             }
         }
         if (binding.price) {
-            const label = binding.price.getComponent(Label);
+            const label = this.resolveNodeLabel(binding.price, '_priceLabel');
             if (label) {
                 label.string = '';
             }
@@ -1268,6 +1348,7 @@ export class ShopPanel extends Component {
         this.dragTouchStartPos = null;
         this.dragStartSlotIndex = -1;
         this.hasLoggedHitBoundsDiagnostics = false;
+        this.hasClearedPlaceholderLabels = false;
         this.onBuyCallback = null;
         this.onRefreshCallback = null;
         this.onLockCallback = null;
