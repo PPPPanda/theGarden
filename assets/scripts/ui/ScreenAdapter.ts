@@ -33,7 +33,7 @@ export const DEVICE_RESOLUTIONS = {
     IPHONE_12_PRO_MAX: { width: 428, height: 926, ratio: 0.462 },
     IPHONE_14: { width: 390, height: 844, ratio: 0.462 },
     IPHONE_14_PRO: { width: 393, height: 852, ratio: 0.461 },
-    IPHONE_14_PRO_MAX: { width: 430, height: 932, ratio: 461 },
+    IPHONE_14_PRO_MAX: { width: 430, height: 932, ratio: 0.461 },
     
     // Android common
     ANDROID_720P: { width: 720, height: 1280, ratio: 0.5625 },
@@ -49,6 +49,37 @@ export const DEVICE_RESOLUTIONS = {
 const REFERENCE_WIDTH = 720;
 const REFERENCE_HEIGHT = 1280;
 const REFERENCE_RATIO = REFERENCE_WIDTH / REFERENCE_HEIGHT;
+
+type SizeLike = { width: number; height: number };
+type RectLike = { x: number; y: number; width: number; height: number };
+
+type ViewStandardApis = {
+    getVisibleSize?: () => SizeLike;
+    getDesignResolutionSize?: () => SizeLike;
+    getSafeAreaRect?: () => RectLike;
+};
+
+type WeChatSafeArea = { top: number; bottom: number; left: number; right: number };
+type WeChatSystemInfo = {
+    safeArea?: WeChatSafeArea;
+    screenHeight: number;
+    screenWidth: number;
+    pixelRatio?: number;
+    model?: string;
+};
+
+type WeChatApi = {
+    getSystemInfoSync: () => WeChatSystemInfo;
+};
+
+function isWeChatApi(value: unknown): value is WeChatApi {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const candidate = value as { getSystemInfoSync?: unknown };
+    return typeof candidate.getSystemInfoSync === 'function';
+}
 
 @ccclass('ScreenAdapter')
 export class ScreenAdapter extends Component {
@@ -177,26 +208,25 @@ export class ScreenAdapter extends Component {
      */
     private updateScreenSize(): void {
         try {
-            const viewAny = view as any;
+            const viewApi = view as unknown as ViewStandardApis;
+
             // Prefer getVisibleSize (stable across Cocos 3.x, no deprecation warning)
-            if (typeof viewAny.getVisibleSize === 'function') {
-                const vs = viewAny.getVisibleSize();
-                if (vs && typeof vs.width === 'number') {
-                    this._screenSize.set(vs.width, vs.height);
-                    return;
-                }
+            const visibleSize = viewApi.getVisibleSize?.();
+            if (visibleSize) {
+                this._screenSize.set(visibleSize.width, visibleSize.height);
+                return;
             }
+
             // Fallback: getDesignResolutionSize (also stable)
-            if (typeof viewAny.getDesignResolutionSize === 'function') {
-                const ds = viewAny.getDesignResolutionSize();
-                if (ds && typeof ds.width === 'number') {
-                    this._screenSize.set(ds.width, ds.height);
-                    return;
-                }
+            const designSize = viewApi.getDesignResolutionSize?.();
+            if (designSize) {
+                this._screenSize.set(designSize.width, designSize.height);
+                return;
             }
         } catch (_e) {
             // Silently fall through
         }
+
         // Ultimate fallback: reference design resolution
         this._screenSize.set(this.referenceWidth, this.referenceHeight);
     }
@@ -231,12 +261,10 @@ export class ScreenAdapter extends Component {
 
         try {
             // getSafeAreaRect may not exist or may throw in Editor Preview
-            const viewAny = view as any;
-            if (typeof viewAny.getSafeAreaRect === 'function') {
-                const r = viewAny.getSafeAreaRect();
-                if (r && typeof r.width === 'number') {
-                    safeRect = { x: r.x, y: r.y, width: r.width, height: r.height };
-                }
+            const viewApi = view as unknown as ViewStandardApis;
+            const rect = viewApi.getSafeAreaRect?.();
+            if (rect) {
+                safeRect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
             }
         } catch (_e) {
             // Silently fall back to full screen
@@ -262,14 +290,15 @@ export class ScreenAdapter extends Component {
      * Setup WeChat mini-game specific safe area
      */
     private setupWeChatSafeArea(): void {
-        // @ts-ignore
-        const wx = (window as any).wx;
-        if (!wx) return;
+        const wxCandidate = (globalThis as { wx?: unknown }).wx;
+        if (!isWeChatApi(wxCandidate)) {
+            return;
+        }
 
         try {
             // Get system info
-            const systemInfo = wx.getSystemInfoSync();
-            
+            const systemInfo = wxCandidate.getSystemInfoSync();
+
             // Get safe area (WeChat specific)
             if (systemInfo.safeArea) {
                 const safeArea = systemInfo.safeArea;
@@ -279,18 +308,16 @@ export class ScreenAdapter extends Component {
 
                 // Calculate safe area in CSS pixels
                 this._safeArea = {
-                    top: (safeArea.top / pixelRatio),
+                    top: safeArea.top / pixelRatio,
                     bottom: (screenHeight - safeArea.bottom) / pixelRatio,
-                    left: (safeArea.left / pixelRatio),
+                    left: safeArea.left / pixelRatio,
                     right: (screenWidth - safeArea.right) / pixelRatio
                 };
             }
 
             // Handle notch devices
-            if (systemInfo.model && (
-                systemInfo.model.includes('iPhone') || 
-                systemInfo.model.includes('iPad')
-            )) {
+            const model = systemInfo.model ?? '';
+            if (model.includes('iPhone') || model.includes('iPad')) {
                 // iOS devices typically have notch
                 this._safeArea.top = Math.max(this._safeArea.top, 44);
                 this._safeArea.bottom = Math.max(this._safeArea.bottom, 34);
