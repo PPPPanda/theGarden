@@ -120,6 +120,65 @@ describe('BattleEngine', () => {
         });
     });
 
+    describe('effect trigger filtering', () => {
+        it('should not execute non-cooldown effects in resolveEvent', () => {
+            const playerGrid = new GridManager(4, 4);
+            const enemyGrid = new GridManager(4, 4);
+
+            // Build item explicitly to avoid helper's fixed damage-only shape
+            const sourceItem: IGridItem = {
+                id: 'filter_main',
+                templateId: 'template_filter_main',
+                name: 'Filter Main',
+                description: 'trigger filter test',
+                rarity: ItemRarity.Common,
+                size: ItemSize.Small,
+                gridSize: { rows: 1, cols: 1 },
+                position: { row: 0, col: 0 },
+                cooldown: 2,
+                currentCooldown: 0,
+                effects: [
+                    {
+                        effectId: 'effect_battle_start',
+                        trigger: TriggerTiming.OnBattleStart,
+                        target: 'enemy',
+                        type: 'damage',
+                        value: 50,
+                    },
+                    {
+                        effectId: 'effect_cooldown',
+                        trigger: TriggerTiming.OnCooldownComplete,
+                        target: 'enemy',
+                        type: 'damage',
+                        value: 10,
+                    }
+                ],
+                level: 1,
+                destroyed: false,
+                enchantments: [],
+            };
+
+            const engine = new BattleEngine({
+                playerItems: [sourceItem],
+                enemyItems: [],
+                playerGrid,
+                enemyGrid,
+                seed: 777,
+                playerHp: 100,
+                enemyHp: 100,
+            });
+
+            const event = engine.advanceToNext();
+            expect(event).not.toBeNull();
+            if (!event) {
+                throw new Error('Expected cooldown event to be emitted');
+            }
+
+            engine.resolveEvent(event);
+            expect(engine.getBattleState().opponent.hero.currentHealth).toBe(90);
+        });
+    });
+
     describe('status effects', () => {
         it('should apply Haste effect (half cooldown)', () => {
             const playerGrid = new GridManager(4, 4);

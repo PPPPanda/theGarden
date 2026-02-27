@@ -23,6 +23,17 @@ interface TimelineEventEntry {
     effects: IItemEffect[];
 }
 
+const BUFF_STATUS_MAP: Record<string, StatusEffectType> = {
+    shield: StatusEffectType.Shield,
+    haste: StatusEffectType.Haste,
+    slow: StatusEffectType.Slow,
+    freeze: StatusEffectType.Freeze,
+    regen: StatusEffectType.Regen,
+    charge: StatusEffectType.Charge,
+    burn: StatusEffectType.Burn,
+    poison: StatusEffectType.Poison,
+};
+
 /**
  * Battle Engine - handles timeline-based battle execution
  */
@@ -446,34 +457,17 @@ export class BattleEngine {
                 case 'heal':
                     this.applyHeal(targetSide, effect.value);
                     break;
-                case 'buff':
-                    // Validate and dispatch buff to correct status type based on params
-                    const rawBuffType = effect.params?.statusType as string;
-                    const validTypes: Record<string, StatusEffectType> = {
-                        'shield': StatusEffectType.Shield,
-                        'haste': StatusEffectType.Haste,
-                        'freeze': StatusEffectType.Freeze,
-                        'slow': StatusEffectType.Slow,
-                        'regen': StatusEffectType.Regen,
-                        'charge': StatusEffectType.Charge,
-                        'burn': StatusEffectType.Burn,
-                        'poison': StatusEffectType.Poison,
-                    };
-                    const buffType = rawBuffType && validTypes[rawBuffType] 
-                        ? validTypes[rawBuffType] 
-                        : StatusEffectType.Shield;
-                    if (!rawBuffType || !validTypes[rawBuffType]) {
-                        console.warn(`[BattleEngine] Unknown buff statusType: '${rawBuffType}', defaulting to Shield`);
-                    }
+                case 'buff': {
+                    const buffType = this.resolveBuffStatusType(effect.params);
                     this.addStatusEffect(sourceSide, {
                         type: buffType,
                         duration: (effect.params?.duration as number) ?? 5,
                         value: effect.value,
                         sourceItemId: item.id,
-                        stacks: effect.value
+                        stacks: Math.max(1, effect.value)
                     });
-                    console.log(`[BattleEngine] Applied buff: ${buffType} to ${sourceSide}`);
                     break;
+                }
                 case 'debuff':
                     const debuffType = (effect.params?.statusType as StatusEffectType) ?? StatusEffectType.Poison;
                     this.addStatusEffect(targetSide, {
@@ -503,6 +497,21 @@ export class BattleEngine {
 
         // Check adjacent coordination
         this.resolveAdjacentEffects(item.id, sourceSide);
+    }
+
+    /**
+     * Resolve buff status type from effect params with safe fallback.
+     */
+    private resolveBuffStatusType(params?: Record<string, unknown>): StatusEffectType {
+        const statusTypeRaw = typeof params?.statusType === 'string' ? params.statusType : '';
+        const mapped = BUFF_STATUS_MAP[statusTypeRaw];
+
+        if (!mapped) {
+            console.warn(`[BattleEngine] Unknown buff statusType: '${statusTypeRaw}', defaulting to shield`);
+            return StatusEffectType.Shield;
+        }
+
+        return mapped;
     }
 
     /**

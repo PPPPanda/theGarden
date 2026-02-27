@@ -3,7 +3,7 @@
  */
 import { BattleEngine } from '../../assets/scripts/core/BattleEngine';
 import { GridManager } from '../../assets/scripts/core/GridManager';
-import { IGridItem, ItemRarity, ItemSize, TriggerTiming } from '../../assets/scripts/core/types';
+import { IGridItem, ItemRarity, ItemSize, StatusEffectType, TriggerTiming } from '../../assets/scripts/core/types';
 
 describe('BattleEngine Battle Resolution', () => {
     // Helper to create test items
@@ -33,6 +33,127 @@ describe('BattleEngine Battle Resolution', () => {
         level: 1,
         destroyed: false,
         enchantments: []
+    });
+
+    describe('trigger filtering', () => {
+        it('should execute only OnCooldownComplete effects for cooldown trigger events', () => {
+            const playerGrid = new GridManager(4, 4);
+            const enemyGrid = new GridManager(4, 4);
+
+            const item = createItem('filter_item', 2, [
+                { trigger: TriggerTiming.OnBattleStart, type: 'damage', value: 80 },
+                { trigger: TriggerTiming.OnCooldownComplete, type: 'damage', value: 10 }
+            ]);
+
+            const engine = new BattleEngine({
+                playerItems: [item],
+                enemyItems: [],
+                playerGrid,
+                enemyGrid,
+                seed: 1100,
+                playerHp: 100,
+                enemyHp: 100
+            });
+
+            const event = engine.advanceToNext();
+            expect(event).not.toBeNull();
+            if (!event) {
+                throw new Error('Expected cooldown event to be emitted');
+            }
+
+            engine.resolveEvent(event);
+
+            // Only cooldown damage should apply (10), OnBattleStart damage must be ignored here.
+            const state = engine.getBattleState();
+            expect(state.opponent.hero.currentHealth).toBe(90);
+        });
+    });
+
+    describe('buff status dispatch', () => {
+        const statusCases: Array<[string, StatusEffectType]> = [
+            ['shield', StatusEffectType.Shield],
+            ['haste', StatusEffectType.Haste],
+            ['slow', StatusEffectType.Slow],
+            ['freeze', StatusEffectType.Freeze],
+            ['regen', StatusEffectType.Regen],
+        ];
+
+        it.each(statusCases)('should dispatch buff statusType=%s to %s', (statusType, expectedType) => {
+            const playerGrid = new GridManager(4, 4);
+            const enemyGrid = new GridManager(4, 4);
+
+            const item = createItem(`buff_${statusType}`, 2, [
+                {
+                    trigger: TriggerTiming.OnCooldownComplete,
+                    type: 'buff',
+                    value: 1,
+                    params: { statusType, duration: 6 }
+                }
+            ]);
+
+            const engine = new BattleEngine({
+                playerItems: [item],
+                enemyItems: [],
+                playerGrid,
+                enemyGrid,
+                seed: 1200,
+                playerHp: 100,
+                enemyHp: 100
+            });
+
+            const event = engine.advanceToNext();
+            expect(event).not.toBeNull();
+            if (!event) {
+                throw new Error('Expected cooldown event to be emitted');
+            }
+
+            engine.resolveEvent(event);
+
+            const state = engine.getBattleState();
+            const applied = state.playerEffects.find(effect => effect.sourceItemId === item.id);
+            expect(applied?.type).toBe(expectedType);
+        });
+
+        it('should fallback to shield and warn for unknown buff statusType', () => {
+            const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+            const playerGrid = new GridManager(4, 4);
+            const enemyGrid = new GridManager(4, 4);
+
+            const item = createItem('buff_unknown', 2, [
+                {
+                    trigger: TriggerTiming.OnCooldownComplete,
+                    type: 'buff',
+                    value: 1,
+                    params: { statusType: 'mystery_status', duration: 4 }
+                }
+            ]);
+
+            const engine = new BattleEngine({
+                playerItems: [item],
+                enemyItems: [],
+                playerGrid,
+                enemyGrid,
+                seed: 1201,
+                playerHp: 100,
+                enemyHp: 100
+            });
+
+            const event = engine.advanceToNext();
+            expect(event).not.toBeNull();
+            if (!event) {
+                throw new Error('Expected cooldown event to be emitted');
+            }
+
+            engine.resolveEvent(event);
+
+            const state = engine.getBattleState();
+            const applied = state.playerEffects.find(effect => effect.sourceItemId === item.id);
+            expect(applied?.type).toBe(StatusEffectType.Shield);
+            expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown buff statusType'));
+
+            warnSpy.mockRestore();
+        });
     });
 
     describe('damage with shield', () => {
