@@ -274,6 +274,15 @@ export class ShopPanel extends Component {
         this.refreshShopUI();
     }
 
+    public onEnable(): void {
+        // Recompute bounds after any runtime layout/application-stage activation.
+        this.scheduleOnce(() => {
+            this.resolveBindings();
+            this.refreshInteractiveBoundsAndHitArea();
+            this.runUiRegressionGuard();
+        }, 0);
+    }
+
     // ============= Binding Resolution =============
 
     /**
