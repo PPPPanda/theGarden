@@ -104,7 +104,7 @@ export interface IGridItem {
     gridSize: IGridSize;       // 实际占位
     position: IGridPosition;   // 网格中锚点（左下角）
     cooldown: number;          // 冷却时间（秒）
-    currentCooldown: number;   // 当前冷却进度
+    currentCooldown: number;   // 距离下次触发的剩余冷却（秒）
     effects: IItemEffect[];    // 效果列表
     level: number;             // 物品等级
     destroyed: boolean;       // 是否已摧毁

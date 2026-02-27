@@ -156,6 +156,139 @@ describe('BattleEngine Battle Resolution', () => {
         });
     });
 
+    describe('charge cooldown acceleration', () => {
+        it('should pull next trigger earlier and clamp cooldown at zero+', () => {
+            const playerGrid = new GridManager(4, 4);
+            const enemyGrid = new GridManager(4, 4);
+
+            const chargeItem = createItem('charger', 2, [
+                {
+                    trigger: TriggerTiming.OnCooldownComplete,
+                    type: 'buff',
+                    value: 2,
+                    params: { statusType: 'charge' }
+                }
+            ]);
+
+            const heavyItem = createItem('heavy', 6, [
+                {
+                    trigger: TriggerTiming.OnCooldownComplete,
+                    type: 'damage',
+                    value: 9
+                }
+            ]);
+
+            const baselineEngine = new BattleEngine({
+                playerItems: [createItem('heavy', 6, [
+                    {
+                        trigger: TriggerTiming.OnCooldownComplete,
+                        type: 'damage',
+                        value: 9
+                    }
+                ])],
+                enemyItems: [],
+                playerGrid: new GridManager(4, 4),
+                enemyGrid: new GridManager(4, 4),
+                seed: 1300,
+                playerHp: 100,
+                enemyHp: 100
+            });
+
+            const baselineHeavyTrigger = baselineEngine.advanceToNext();
+            expect(baselineHeavyTrigger).not.toBeNull();
+            if (!baselineHeavyTrigger) {
+                throw new Error('Expected baseline heavy trigger event');
+            }
+
+            const engine = new BattleEngine({
+                playerItems: [chargeItem, heavyItem],
+                enemyItems: [],
+                playerGrid,
+                enemyGrid,
+                seed: 1300,
+                playerHp: 100,
+                enemyHp: 100
+            });
+
+            const first = engine.advanceToNext();
+            expect(first).not.toBeNull();
+            if (!first) {
+                throw new Error('Expected first charge trigger event');
+            }
+
+            engine.resolveEvent(first);
+
+            const heavyCooldownAfterCharge = engine.getBattleState().player.items.find(i => i.id === 'heavy')?.currentCooldown ?? Infinity;
+            expect(heavyCooldownAfterCharge).toBeGreaterThanOrEqual(0);
+
+            let heavyTriggerTime: number | null = null;
+            for (let i = 0; i < 5; i++) {
+                const event = engine.advanceToNext();
+                if (!event) break;
+                if (event.itemId === 'heavy') {
+                    heavyTriggerTime = event.time;
+                    break;
+                }
+                engine.resolveEvent(event);
+            }
+
+            expect(heavyTriggerTime).not.toBeNull();
+            expect(heavyTriggerTime ?? Infinity).toBeLessThan(baselineHeavyTrigger.time);
+
+            const nonNegativeCooldowns = engine.getBattleState().player.items.every(i => i.currentCooldown >= 0);
+            expect(nonNegativeCooldowns).toBe(true);
+        });
+
+        it('should remain deterministic for charge-enabled battles with same seed', () => {
+            const createEngine = () => {
+                const playerGrid = new GridManager(4, 4);
+                const enemyGrid = new GridManager(4, 4);
+
+                const chargeItem = createItem('charger', 2, [
+                    {
+                        trigger: TriggerTiming.OnCooldownComplete,
+                        type: 'buff',
+                        value: 2,
+                        params: { statusType: 'charge' }
+                    }
+                ]);
+
+                const damageItem = createItem('damage', 4, [
+                    {
+                        trigger: TriggerTiming.OnCooldownComplete,
+                        type: 'damage',
+                        value: 7
+                    }
+                ]);
+
+                const enemyItem = createItem('enemy', 3, [
+                    {
+                        trigger: TriggerTiming.OnCooldownComplete,
+                        type: 'damage',
+                        value: 6
+                    }
+                ]);
+
+                return new BattleEngine({
+                    playerItems: [chargeItem, damageItem],
+                    enemyItems: [enemyItem],
+                    playerGrid,
+                    enemyGrid,
+                    seed: 1301,
+                    playerHp: 100,
+                    enemyHp: 100,
+                    maxDuration: 20
+                });
+            };
+
+            const resultA = createEngine().runFullBattle();
+            const resultB = createEngine().runFullBattle();
+
+            expect(JSON.stringify(resultA.eventLog)).toEqual(JSON.stringify(resultB.eventLog));
+            expect(resultA.result).toEqual(resultB.result);
+        });
+    });
+
     describe('damage with shield', () => {
         it('should absorb damage with shield stacks', () => {
             const playerGrid = new GridManager(4, 4);

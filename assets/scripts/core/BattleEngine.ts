@@ -34,6 +34,9 @@ const BUFF_STATUS_MAP: Record<string, StatusEffectType> = {
     poison: StatusEffectType.Poison,
 };
 
+// Prevent zero-time self-loop storms when cooldown is aggressively reduced.
+const MIN_EVENT_INTERVAL = 0.01;
+
 /**
  * Battle Engine - handles timeline-based battle execution
  */
@@ -95,6 +98,7 @@ export class BattleEngine {
 
         // Initialize timeline
         this.initTimeline();
+        this.syncCooldownsFromTimeline();
     }
 
     /**
@@ -145,7 +149,7 @@ export class BattleEngine {
             // Schedule ONE entry per item, carrying all effects
             const effectiveCooldown = this.getEffectiveCooldown(item.cooldown, side === 'player' ? this.playerEffects : this.enemyEffects);
             if (effectiveCooldown > 0 && effectiveCooldown !== Infinity) {
-                const initialDelay = effectiveCooldown * 0.5;
+                const initialDelay = Math.max(MIN_EVENT_INTERVAL, effectiveCooldown * 0.5);
                 this.eventTimeline.insert({
                     time: initialDelay,
                     itemId: item.id,
@@ -234,9 +238,13 @@ export class BattleEngine {
             : this.enemyItems.find(i => i.id === entry.itemId);
 
         if (item && !item.destroyed) {
-            // Apply cooldown for next trigger
+            // Trigger fired now; cooldown starts counting from zero and gets rescheduled.
+            item.currentCooldown = 0;
             this.scheduleItemTrigger(item, entry.side);
         }
+
+        // Keep cooldown snapshots in sync after extraction/reschedule.
+        this.syncCooldownsFromTimeline();
 
         // Check if battle should end
         if (this.playerHp <= 0 || this.enemyHp <= 0) {
@@ -259,8 +267,9 @@ export class BattleEngine {
             const effectiveCooldown = this.getEffectiveCooldown(item.cooldown, effects);
             if (effectiveCooldown > 0 && effectiveCooldown !== Infinity) {
                 // Schedule ONE entry per item, carrying all effects
+                const delay = Math.max(MIN_EVENT_INTERVAL, effectiveCooldown);
                 this.eventTimeline.insert({
-                    time: this.currentTime + effectiveCooldown,
+                    time: this.currentTime + delay,
                     itemId: item.id,
                     side,
                     effects: cooldownEffects // ALL effects together
@@ -465,7 +474,6 @@ export class BattleEngine {
                         // Charge reduces cooldown of all items on source side
                         const chargeAmount = effect.value;
                         this.applyChargeToSide(sourceSide, chargeAmount, item.id);
-                        console.log(`[BattleEngine] Charge: reduced cooldown by ${chargeAmount} for ${sourceSide} side`);
                     } else {
                         // Other buffs create status effects
                         this.addStatusEffect(sourceSide, {
@@ -525,20 +533,88 @@ export class BattleEngine {
     }
 
     /**
-     * Apply charge effect - reduces cooldown of all items on the given side
-     * Charge is an instant effect that reduces currentCooldown (not a status effect)
+     * Apply charge effect instantly.
+     *
+     * Design note: Charge is immediate (non-persistent). It advances cooldown by
+     * pulling forward queued trigger times for allied items (excluding source item).
      */
     private applyChargeToSide(side: 'player' | 'enemy', chargeAmount: number, sourceItemId: string): void {
+        if (chargeAmount <= 0) {
+            return;
+        }
+
         const items = side === 'player' ? this.playerItems : this.enemyItems;
-        
+
         for (const item of items) {
-            if (item.destroyed) continue;
-            
-            // Reduce cooldown, clamped to minimum 0
-            const oldCooldown = item.currentCooldown;
+            if (item.destroyed || item.id === sourceItemId) continue;
+
             item.currentCooldown = Math.max(0, item.currentCooldown - chargeAmount);
-            
-            console.log(`[BattleEngine] Charge: item ${item.id} (${item.name}) cooldown ${oldCooldown}s -> ${item.currentCooldown}s`);
+        }
+
+        // Rebuild timeline so queued triggers really move earlier.
+        // Source item is excluded to avoid self-acceleration loops.
+        const entries = this.eventTimeline.toArray();
+        this.eventTimeline.clear();
+
+        for (const entry of entries) {
+            if (entry.side !== side || entry.itemId === sourceItemId) {
+                this.eventTimeline.insert(entry);
+                continue;
+            }
+
+            const adjustedTime = Math.max(this.currentTime + MIN_EVENT_INTERVAL, entry.time - chargeAmount);
+            this.eventTimeline.insert({
+                ...entry,
+                time: adjustedTime,
+            });
+        }
+
+        this.syncCooldownsFromTimeline();
+
+        this.eventLog.push({
+            time: this.currentTime,
+            type: 'effect_tick',
+            target: side,
+            value: chargeAmount,
+            description: `Charge from ${sourceItemId} advanced ${side} cooldown by ${chargeAmount}s`
+        });
+    }
+
+    /**
+     * Sync all item currentCooldown snapshots with queued timeline events.
+     */
+    private syncCooldownsFromTimeline(): void {
+        const entries = this.eventTimeline.toArray();
+
+        const playerNextTimes = new Map<string, number>();
+        const enemyNextTimes = new Map<string, number>();
+
+        for (const entry of entries) {
+            const map = entry.side === 'player' ? playerNextTimes : enemyNextTimes;
+            const prev = map.get(entry.itemId);
+            if (prev === undefined || entry.time < prev) {
+                map.set(entry.itemId, entry.time);
+            }
+        }
+
+        this.syncSideCooldowns(this.playerItems, playerNextTimes);
+        this.syncSideCooldowns(this.enemyItems, enemyNextTimes);
+    }
+
+    /**
+     * Sync one side cooldown snapshots using earliest queued trigger times.
+     */
+    private syncSideCooldowns(items: IGridItem[], nextTimes: Map<string, number>): void {
+        for (const item of items) {
+            if (item.destroyed) {
+                item.currentCooldown = 0;
+                continue;
+            }
+
+            const nextTime = nextTimes.get(item.id);
+            item.currentCooldown = nextTime === undefined
+                ? 0
+                : Math.max(0, nextTime - this.currentTime);
         }
     }
 
@@ -680,6 +756,10 @@ export class BattleEngine {
                         value: regenAmount,
                         description: `Regen healed ${regenAmount.toFixed(2)} HP`
                     });
+                    break;
+
+                case StatusEffectType.Charge:
+                    // Charge is immediate in resolveEvent() and not modeled as a persistent tick effect.
                     break;
             }
 
