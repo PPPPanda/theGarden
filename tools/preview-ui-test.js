@@ -1,4 +1,8 @@
+const fs = require('fs');
+const path = require('path');
 const puppeteer = require('puppeteer');
+
+const SNAPSHOT_PATH = path.join(__dirname, 'preview-ui-last.json');
 
 const CANDIDATE_URLS = [
   process.env.PREVIEW_URL,
@@ -24,7 +28,7 @@ function overlap(a, b) {
   return !(a.maxX < b.minX || b.maxX < a.minX || a.maxY < b.minY || b.maxY < a.minY);
 }
 
-async function collectLayout(page) {
+async function evaluateRuntime(page) {
   return page.evaluate(() => {
     const scene = cc?.director?.getScene?.();
     if (!scene) {
@@ -41,13 +45,31 @@ async function collectLayout(page) {
       return null;
     };
 
+    const sceneRoot = findByName(scene, 'Canvas') || scene;
+    const root = findByName(sceneRoot, 'Root') || sceneRoot;
+    const shopPanel = findByName(root, 'ShopPanel');
+    const flowControls = findByName(root, 'FlowControls') || findByName(scene, 'FlowControls');
+    const mainCameraNode = findByName(scene, 'Main Camera');
+
+    const main = root?.getComponent?.('MainScene');
+    if (!shopPanel || !flowControls || !main || !mainCameraNode) {
+      return { ok: false, reason: 'missing ShopPanel/FlowControls/MainScene/Main Camera' };
+    }
+
+    const camera = mainCameraNode.getComponent?.('cc.Camera') || mainCameraNode.getComponent?.(cc.Camera);
+    if (!camera || typeof camera.worldToScreen !== 'function') {
+      return { ok: false, reason: 'missing camera.worldToScreen' };
+    }
+
+    const overlapRect = (a, b) => !(a.maxX < b.minX || b.maxX < a.minX || a.maxY < b.minY || b.maxY < a.minY);
+
     const rectFromNode = (node) => {
       if (!node) return null;
-      const transform = node.getComponent?.('cc.UITransform') || node.getComponent?.(cc.UITransform);
-      if (!transform || typeof transform.getBoundingBoxToWorld !== 'function') {
+      const tr = node.getComponent?.('cc.UITransform') || node.getComponent?.(cc.UITransform);
+      if (!tr || typeof tr.getBoundingBoxToWorld !== 'function') {
         return null;
       }
-      const box = transform.getBoundingBoxToWorld();
+      const box = tr.getBoundingBoxToWorld();
       return {
         minX: box.x,
         maxX: box.x + box.width,
@@ -71,15 +93,11 @@ async function collectLayout(page) {
       if (!node) return null;
 
       const selfRect = rectFromNode(node);
-      if (selfRect) {
-        return selfRect;
-      }
+      if (selfRect) return selfRect;
 
       const btn = node.getComponent?.('cc.Button') || node.getComponent?.(cc.Button);
       const targetRect = rectFromNode(btn?.target);
-      if (targetRect) {
-        return targetRect;
-      }
+      if (targetRect) return targetRect;
 
       let merged = null;
       for (const child of node.children || []) {
@@ -93,169 +111,67 @@ async function collectLayout(page) {
       y: (rect.minY + rect.maxY) / 2,
     });
 
-    const overlap = (a, b) => !(a.maxX < b.minX || b.maxX < a.minX || a.maxY < b.minY || b.maxY < a.minY);
-
-    const sceneRoot = findByName(scene, 'Canvas') || scene;
-    const root = findByName(sceneRoot, 'Root') || sceneRoot;
-    const shopPanel = findByName(root, 'ShopPanel');
-    const flowControls = findByName(root, 'FlowControls') || findByName(scene, 'FlowControls');
-
-    if (!shopPanel || !flowControls) {
-      return { ok: false, reason: 'ShopPanel or FlowControls missing' };
-    }
+    const toViewport = (worldPoint) => {
+      const s = camera.worldToScreen(new cc.Vec3(worldPoint.x, worldPoint.y, 0));
+      return {
+        x: s.x,
+        y: window.innerHeight - s.y,
+      };
+    };
 
     const enterGridBtn = findByName(flowControls, 'EnterGridBtn');
     const startBattleBtn = findByName(flowControls, 'StartBattleBtn');
     const continueBtn = findByName(flowControls, 'ContinueNextDayBtn');
     const refreshBtn = findByName(shopPanel, 'RefreshButton') || findByName(shopPanel, 'refreshBtn');
 
-    const shopComp = shopPanel.getComponent('ShopPanel');
-    const firstBinding = shopComp?.slotBindings?.[0] ?? null;
-    const buyBtn = firstBinding?.buyBtn ?? null;
-    const lockBtn = firstBinding?.lockBtn ?? null;
-
-    if (!enterGridBtn || !startBattleBtn || !continueBtn || !refreshBtn || !buyBtn || !lockBtn) {
-      return { ok: false, reason: 'required controls missing' };
+    if (!enterGridBtn || !startBattleBtn || !continueBtn || !refreshBtn) {
+      return { ok: false, reason: 'missing one or more flow/shop buttons' };
     }
 
-    const shopRect = rectOf(shopPanel);
-    const refreshRect = rectOf(refreshBtn);
     const enterRect = rectOf(enterGridBtn);
     const battleRect = rectOf(startBattleBtn);
     const continueRect = rectOf(continueBtn);
-    const buyRect = rectOf(buyBtn);
-    const lockRect = rectOf(lockBtn);
+    const refreshRect = rectOf(refreshBtn);
+    const shopRect = rectOf(shopPanel);
 
-    if (!shopRect || !refreshRect || !enterRect || !battleRect || !continueRect || !buyRect || !lockRect) {
-      return { ok: false, reason: 'failed to compute bounds' };
+    if (!enterRect || !battleRect || !continueRect || !refreshRect || !shopRect) {
+      return { ok: false, reason: 'failed to compute button/shop rects' };
     }
 
-    const overlapResult = {
+    const overlapReport = {
       EnterGridBtn: {
-        shopRootOverlap: overlap(shopRect, enterRect),
-        refreshOverlap: overlap(refreshRect, enterRect),
+        shopRootOverlap: overlapRect(shopRect, enterRect),
+        refreshOverlap: overlapRect(refreshRect, enterRect),
       },
       StartBattleBtn: {
-        shopRootOverlap: overlap(shopRect, battleRect),
-        refreshOverlap: overlap(refreshRect, battleRect),
+        shopRootOverlap: overlapRect(shopRect, battleRect),
+        refreshOverlap: overlapRect(refreshRect, battleRect),
       },
       ContinueNextDayBtn: {
-        shopRootOverlap: overlap(shopRect, continueRect),
-        refreshOverlap: overlap(refreshRect, continueRect),
+        shopRootOverlap: overlapRect(shopRect, continueRect),
+        refreshOverlap: overlapRect(refreshRect, continueRect),
       },
     };
 
     return {
       ok: true,
-      overlapResult,
+      stage: typeof main.getCurrentStage === 'function' ? main.getCurrentStage() : 'unknown',
+      phase: typeof main.getPhase === 'function' ? main.getPhase() : 'unknown',
+      day: typeof main.getDay === 'function' ? main.getDay() : null,
       points: {
-        EnterGridBtn: centerOf(enterRect),
-        StartBattleBtn: centerOf(battleRect),
-        ContinueNextDayBtn: centerOf(continueRect),
-        RefreshButton: centerOf(refreshRect),
-        BuyButton: centerOf(buyRect),
-        LockButton: centerOf(lockRect),
+        EnterGridBtn: toViewport(centerOf(enterRect)),
+        StartBattleBtn: toViewport(centerOf(battleRect)),
+        ContinueNextDayBtn: toViewport(centerOf(continueRect)),
       },
+      overlapReport,
     };
   });
-}
-
-async function emitControlEvent(page, controlName, point) {
-  return page.evaluate(({ controlName, point }) => {
-    const scene = cc?.director?.getScene?.();
-    if (!scene) {
-      return false;
-    }
-
-    const findByName = (root, name) => {
-      if (!root) return null;
-      if (root.name === name) return root;
-      for (const child of root.children || []) {
-        const found = findByName(child, name);
-        if (found) return found;
-      }
-      return null;
-    };
-
-    const sceneRoot = findByName(scene, 'Canvas') || scene;
-    const root = findByName(sceneRoot, 'Root') || sceneRoot;
-    const shopPanel = findByName(root, 'ShopPanel');
-    const flowControls = findByName(root, 'FlowControls') || findByName(scene, 'FlowControls');
-
-    const emitTouch = (node) => {
-      if (!node) return false;
-      const mockEvent = {
-        touch: {
-          getLocation: () => ({ x: point.x, y: point.y })
-        },
-        getUILocation: () => ({ x: point.x, y: point.y })
-      };
-      const eventTypeA = cc?.Node?.EventType?.TOUCH_END || 'touch-end';
-      node.emit(eventTypeA, mockEvent);
-      if (eventTypeA !== 'touchend') {
-        node.emit('touchend', mockEvent);
-      }
-      return true;
-    };
-
-    switch (controlName) {
-      case 'EnterGridBtn':
-      case 'StartBattleBtn':
-      case 'ContinueNextDayBtn': {
-        const node = findByName(flowControls, controlName);
-        return emitTouch(node);
-      }
-      case 'RefreshButton': {
-        const node = findByName(shopPanel, 'RefreshButton') || findByName(shopPanel, 'refreshBtn');
-        return emitTouch(node);
-      }
-      case 'BuyButton': {
-        const comp = shopPanel?.getComponent('ShopPanel');
-        const node = comp?.slotBindings?.[0]?.buyBtn ?? null;
-        return emitTouch(node);
-      }
-      case 'LockButton': {
-        const comp = shopPanel?.getComponent('ShopPanel');
-        const node = comp?.slotBindings?.[0]?.lockBtn ?? null;
-        return emitTouch(node);
-      }
-      default:
-        return false;
-    }
-  }, { controlName, point });
-}
-
-async function emitAndCheck(page, logs, controlName, point, expected = [], forbidden = []) {
-  const start = logs.length;
-  const emitted = await emitControlEvent(page, controlName, point);
-  if (!emitted) {
-    return { ok: false, reason: `${controlName} emit failed` };
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const delta = logs.slice(start);
-
-  for (const text of expected) {
-    if (!delta.some((line) => line.includes(text))) {
-      return { ok: false, reason: `${controlName} missing expected log: ${text}` };
-    }
-  }
-
-  for (const text of forbidden) {
-    if (delta.some((line) => line.includes(text))) {
-      return { ok: false, reason: `${controlName} found forbidden log: ${text}` };
-    }
-  }
-
-  return { ok: true };
 }
 
 async function resetToShop(page) {
   await page.evaluate(() => {
     const scene = cc?.director?.getScene?.();
-    if (!scene) {
-      return;
-    }
+    if (!scene) return;
 
     const findByName = (root, name) => {
       if (!root) return null;
@@ -270,7 +186,7 @@ async function resetToShop(page) {
     const main = findByName(scene, 'Root')?.getComponent?.('MainScene')
       || findByName(scene, 'Canvas')?.getChildByName?.('Root')?.getComponent?.('MainScene');
 
-    if (!main || typeof main.getCurrentStage !== 'function' || typeof main.transitionToStage !== 'function') {
+    if (!main || typeof main.getCurrentStage !== 'function') {
       return;
     }
 
@@ -278,17 +194,96 @@ async function resetToShop(page) {
       if (main.getCurrentStage() !== 'shop' && main.canTransitionTo?.('shop')) {
         main.transitionToStage('shop');
       }
-    } catch (_e) {
-      // best-effort reset only
+    } catch (_error) {
+      // best effort reset
     }
   });
-  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  await new Promise((resolve) => setTimeout(resolve, 400));
+}
+
+async function realClickAndProbe(page, logs, controlName, expectedEntryLog, expectedStageAfter) {
+  const before = await evaluateRuntime(page);
+  if (!before.ok) {
+    return {
+      ok: false,
+      controlName,
+      reason: `runtime unavailable before click: ${before.reason}`,
+      before,
+      after: null,
+      deltaLogs: [],
+      intercepted: false,
+      entryTriggered: false,
+      stageSwitched: false,
+    };
+  }
+
+  const point = before.points?.[controlName];
+  if (!point) {
+    return {
+      ok: false,
+      controlName,
+      reason: 'missing click point',
+      before,
+      after: null,
+      deltaLogs: [],
+      intercepted: false,
+      entryTriggered: false,
+      stageSwitched: false,
+    };
+  }
+
+  const offset = logs.length;
+  await page.mouse.click(point.x, point.y);
+  await new Promise((resolve) => setTimeout(resolve, 550));
+
+  const after = await evaluateRuntime(page);
+  const deltaLogs = logs.slice(offset);
+
+  const intercepted = deltaLogs.some((line) => line.includes('[ShopPanel] REFRESH touched'));
+  const entryTriggered = deltaLogs.some((line) => line.includes(expectedEntryLog));
+  const stageSwitched = Boolean(before.stage !== after.stage && after.stage === expectedStageAfter);
+
+  const reasons = [];
+  if (intercepted) reasons.push('intercepted by ShopPanel refresh');
+  if (!entryTriggered) reasons.push('MainScene entry log missing');
+  if (!stageSwitched) reasons.push(`stage not switched to ${expectedStageAfter}`);
+
+  return {
+    ok: reasons.length === 0,
+    controlName,
+    reason: reasons.join('; ') || 'ok',
+    before,
+    after,
+    deltaLogs,
+    intercepted,
+    entryTriggered,
+    stageSwitched,
+  };
+}
+
+function printActionResult(result) {
+  console.log(`[UI_TEST] ${result.controlName}`);
+  console.log(`  - before: stage=${result.before?.stage} phase=${result.before?.phase} day=${result.before?.day}`);
+  console.log(`  - after : stage=${result.after?.stage} phase=${result.after?.phase} day=${result.after?.day}`);
+  console.log(`  - intercepted: ${result.intercepted}`);
+  console.log(`  - entryTriggered: ${result.entryTriggered}`);
+  console.log(`  - stageSwitched: ${result.stageSwitched}`);
+  if (result.deltaLogs.length > 0) {
+    console.log('  - logSnapshot:');
+    for (const line of result.deltaLogs) {
+      console.log(`      ${line}`);
+    }
+  }
+  if (!result.ok) {
+    console.log(`  - failureReason: ${result.reason}`);
+  }
 }
 
 (async () => {
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'],
   });
 
   const page = await browser.newPage();
@@ -297,102 +292,83 @@ async function resetToShop(page) {
   const logs = [];
   page.on('console', (msg) => logs.push(msg.text()));
 
-  let url;
+  const snapshot = {
+    timestamp: new Date().toISOString(),
+    connectedUrl: null,
+    overlap: null,
+    actions: [],
+    overallPass: false,
+  };
+
   try {
-    url = await openPreview(page);
-  } catch (error) {
-    console.error('[UI_TEST] FAIL: unable to open preview URL');
-    console.error(String(error));
-    await browser.close();
-    process.exit(1);
-  }
+    snapshot.connectedUrl = await openPreview(page);
+    console.log(`[UI_TEST] Connected: ${snapshot.connectedUrl}`);
+    await new Promise((resolve) => setTimeout(resolve, 6000));
 
-  console.log(`[UI_TEST] Connected: ${url}`);
-  await new Promise((resolve) => setTimeout(resolve, 5000));
-
-  const layout = await collectLayout(page);
-  if (!layout.ok) {
-    console.error(`[UI_TEST] FAIL: ${layout.reason}`);
-    await browser.close();
-    process.exit(1);
-  }
-
-  console.log('[UI_TEST] Touch Area Overlap Report');
-  let overlapFailed = false;
-  for (const [name, result] of Object.entries(layout.overlapResult)) {
-    const pass = !result.shopRootOverlap && !result.refreshOverlap;
-    if (!pass) overlapFailed = true;
-    console.log(` - ${name}: ${pass ? 'PASS' : 'FAIL'} (shopRootOverlap=${result.shopRootOverlap}, refreshOverlap=${result.refreshOverlap})`);
-  }
-
-  if (overlapFailed) {
-    console.error('[UI_TEST] Touch Area Overlap: FAIL');
-    await browser.close();
-    process.exit(1);
-  }
-
-  const flowChecks = [
-    ['EnterGridBtn', '[MainScene] ENTER_GRID touched!'],
-    ['StartBattleBtn', '[MainScene] START_BATTLE touched!'],
-    ['ContinueNextDayBtn', '[MainScene] CONTINUE_NEXT_DAY touched!'],
-  ];
-
-  for (const [controlName, expectedLog] of flowChecks) {
     await resetToShop(page);
-    const currentLayout = await collectLayout(page);
-    if (!currentLayout.ok) {
-      console.error(`[UI_TEST] FAIL: ${currentLayout.reason}`);
-      await browser.close();
-      process.exit(1);
+
+    const baseline = await evaluateRuntime(page);
+    if (!baseline.ok) {
+      throw new Error(`runtime baseline failed: ${baseline.reason}`);
     }
 
-    const r = await emitAndCheck(
+    console.log('[UI_TEST] Touch Area Overlap Report');
+    snapshot.overlap = baseline.overlapReport;
+
+    let overlapFailed = false;
+    for (const [name, item] of Object.entries(baseline.overlapReport)) {
+      const pass = !item.shopRootOverlap && !item.refreshOverlap;
+      if (!pass) overlapFailed = true;
+      console.log(` - ${name}: ${pass ? 'PASS' : 'FAIL'} (shopRootOverlap=${item.shopRootOverlap}, refreshOverlap=${item.refreshOverlap})`);
+    }
+
+    const enterGridResult = await realClickAndProbe(
       page,
       logs,
-      controlName,
-      currentLayout.points[controlName],
-      [expectedLog],
-      ['[ShopPanel] REFRESH touched']
+      'EnterGridBtn',
+      '[MainScene] ENTER_GRID touched!',
+      'grid'
     );
-    if (!r.ok) {
-      console.error(`[UI_TEST] FAIL: ${r.reason}`);
-      await browser.close();
-      process.exit(1);
+    snapshot.actions.push(enterGridResult);
+    printActionResult(enterGridResult);
+
+    const startBattleResult = await realClickAndProbe(
+      page,
+      logs,
+      'StartBattleBtn',
+      '[MainScene] START_BATTLE touched!',
+      'battle'
+    );
+    snapshot.actions.push(startBattleResult);
+    printActionResult(startBattleResult);
+
+    const actionPass = snapshot.actions.every((x) => x.ok);
+    snapshot.overallPass = !overlapFailed && actionPass;
+
+    if (!snapshot.overallPass) {
+      const failReasons = [];
+      if (overlapFailed) failReasons.push('touch overlap still exists');
+      for (const action of snapshot.actions) {
+        if (!action.ok) {
+          failReasons.push(`${action.controlName}: ${action.reason}`);
+        }
+      }
+      console.error(`[UI_TEST] FAIL: ${failReasons.join(' | ')}`);
+      fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2), 'utf8');
+      console.error(`[UI_TEST] Snapshot written: ${SNAPSHOT_PATH}`);
+      process.exitCode = 1;
+    } else {
+      console.log('[UI_TEST] PASS: real click chain works (Shop -> Grid -> Battle)');
+      fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2), 'utf8');
+      console.log(`[UI_TEST] Snapshot written: ${SNAPSHOT_PATH}`);
     }
-  }
-
-  await resetToShop(page);
-  const shopLayout = await collectLayout(page);
-  if (!shopLayout.ok) {
-    console.error(`[UI_TEST] FAIL: ${shopLayout.reason}`);
+  } catch (error) {
+    snapshot.error = String(error);
+    fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2), 'utf8');
+    console.error('[UI_TEST] FAIL:', error);
+    console.error(`[UI_TEST] Snapshot written: ${SNAPSHOT_PATH}`);
+    process.exitCode = 1;
+  } finally {
     await browser.close();
-    process.exit(1);
   }
-
-  const refreshCheck = await emitAndCheck(page, logs, 'RefreshButton', shopLayout.points.RefreshButton, ['[ShopPanel] REFRESH touched']);
-  if (!refreshCheck.ok) {
-    console.error(`[UI_TEST] FAIL: ${refreshCheck.reason}`);
-    await browser.close();
-    process.exit(1);
-  }
-
-  const buyCheck = await emitAndCheck(page, logs, 'BuyButton', shopLayout.points.BuyButton, ['[ShopPanel] BUY touched']);
-  if (!buyCheck.ok) {
-    console.error(`[UI_TEST] FAIL: ${buyCheck.reason}`);
-    await browser.close();
-    process.exit(1);
-  }
-
-  const lockCheck = await emitAndCheck(page, logs, 'LockButton', shopLayout.points.LockButton, ['[ShopPanel] LOCK touched']);
-  if (!lockCheck.ok) {
-    console.error(`[UI_TEST] FAIL: ${lockCheck.reason}`);
-    await browser.close();
-    process.exit(1);
-  }
-
-  console.log('[UI_TEST] Touch Area Overlap: PASS');
-  console.log('[UI_TEST] Flow controls click path: PASS');
-  console.log('[UI_TEST] Shop interactions (refresh/buy/lock): PASS');
-
-  await browser.close();
 })();

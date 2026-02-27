@@ -1,0 +1,175 @@
+{
+  "timestamp": "2026-02-27T18:25:20.397Z",
+  "connectedUrl": "http://192.168.10.100:7456",
+  "overlap": {
+    "EnterGridBtn": {
+      "shopRootOverlap": false,
+      "refreshOverlap": false
+    },
+    "StartBattleBtn": {
+      "shopRootOverlap": false,
+      "refreshOverlap": false
+    },
+    "ContinueNextDayBtn": {
+      "shopRootOverlap": false,
+      "refreshOverlap": false
+    }
+  },
+  "actions": [
+    {
+      "ok": false,
+      "controlName": "EnterGridBtn",
+      "reason": "MainScene entry log missing; stage not switched to grid",
+      "before": {
+        "ok": true,
+        "stage": "shop",
+        "phase": "shop",
+        "day": 1,
+        "points": {
+          "EnterGridBtn": {
+            "x": 453.1519413401343,
+            "y": 589.0653598404018
+          },
+          "StartBattleBtn": {
+            "x": 640,
+            "y": 589.0653598404018
+          },
+          "ContinueNextDayBtn": {
+            "x": 834.9718872972511,
+            "y": 589.0653598404018
+          }
+        },
+        "overlapReport": {
+          "EnterGridBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          },
+          "StartBattleBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          },
+          "ContinueNextDayBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          }
+        }
+      },
+      "after": {
+        "ok": true,
+        "stage": "shop",
+        "phase": "shop",
+        "day": 1,
+        "points": {
+          "EnterGridBtn": {
+            "x": 453.1519413401343,
+            "y": 589.0653598404018
+          },
+          "StartBattleBtn": {
+            "x": 640,
+            "y": 589.0653598404018
+          },
+          "ContinueNextDayBtn": {
+            "x": 834.9718872972511,
+            "y": 589.0653598404018
+          }
+        },
+        "overlapReport": {
+          "EnterGridBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          },
+          "StartBattleBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          },
+          "ContinueNextDayBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          }
+        }
+      },
+      "deltaLogs": [],
+      "intercepted": false,
+      "entryTriggered": false,
+      "stageSwitched": false
+    },
+    {
+      "ok": false,
+      "controlName": "StartBattleBtn",
+      "reason": "MainScene entry log missing; stage not switched to battle",
+      "before": {
+        "ok": true,
+        "stage": "shop",
+        "phase": "shop",
+        "day": 1,
+        "points": {
+          "EnterGridBtn": {
+            "x": 453.1519413401343,
+            "y": 589.0653598404018
+          },
+          "StartBattleBtn": {
+            "x": 640,
+            "y": 589.0653598404018
+          },
+          "ContinueNextDayBtn": {
+            "x": 834.9718872972511,
+            "y": 589.0653598404018
+          }
+        },
+        "overlapReport": {
+          "EnterGridBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          },
+          "StartBattleBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          },
+          "ContinueNextDayBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          }
+        }
+      },
+      "after": {
+        "ok": true,
+        "stage": "shop",
+        "phase": "shop",
+        "day": 1,
+        "points": {
+          "EnterGridBtn": {
+            "x": 453.1519413401343,
+            "y": 589.0653598404018
+          },
+          "StartBattleBtn": {
+            "x": 640,
+            "y": 589.0653598404018
+          },
+          "ContinueNextDayBtn": {
+            "x": 834.9718872972511,
+            "y": 589.0653598404018
+          }
+        },
+        "overlapReport": {
+          "EnterGridBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          },
+          "StartBattleBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          },
+          "ContinueNextDayBtn": {
+            "shopRootOverlap": false,
+            "refreshOverlap": false
+          }
+        }
+      },
+      "deltaLogs": [],
+      "intercepted": false,
+      "entryTriggered": false,
+      "stageSwitched": false
+    }
+  ],
+  "overallPass": false
+}
