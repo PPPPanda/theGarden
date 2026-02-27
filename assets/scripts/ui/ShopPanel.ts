@@ -901,7 +901,9 @@ export class ShopPanel extends Component {
 
         let cleared = 0;
         const walk = (node: Node): void => {
-            const label = node.getComponent(Label);
+            const typedLabel = node.getComponent(Label);
+            const stringLabel = node.getComponent('cc.Label') as Label | null;
+            const label = typedLabel ?? stringLabel;
             if (label && label.string === 'Label') {
                 label.string = '';
                 cleared += 1;
