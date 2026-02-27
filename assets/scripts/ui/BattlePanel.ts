@@ -470,7 +470,7 @@ export class BattlePanel extends Component {
             
             if (t >= 1) {
                 floatNode.destroy();
-                this.node.off('update', updateFloat);
+                this.unschedule(updateFloat); // Use schedule cleanup instead of node.off
                 return;
             }
 
@@ -485,7 +485,8 @@ export class BattlePanel extends Component {
             }
         };
 
-        this.node.on('update', updateFloat);
+        // Use schedule instead of node.on('update')
+        this.schedule(updateFloat);
     }
 
     /**
@@ -808,6 +809,14 @@ export class BattlePanel extends Component {
         if (this.continueClickTarget) {
             this.continueClickTarget.off('click', this.onContinueClicked, this);
             this.continueClickTarget = null;
+        }
+        
+        // Clean up all scheduled callbacks (floating text animations)
+        this.unscheduleAllCallbacks();
+        
+        // Clean up floating text layer nodes if exists
+        if (this.floatingTextLayer) {
+            this.floatingTextLayer.destroyAllChildren();
         }
         
         this.hide();
