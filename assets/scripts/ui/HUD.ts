@@ -94,12 +94,12 @@ export class HUD extends Component {
     }
 
     start(): void {
-        this.refreshDisplay();
-        this.schedule(this.refreshDisplay, this.updateInterval);
+        this.refreshAll();
+        this.schedule(this.refreshAll, this.updateInterval);
     }
 
     onDestroy(): void {
-        this.unschedule(this.refreshDisplay);
+        this.unschedule(this.refreshAll);
     }
 
     // ============= Initialization =============
@@ -109,7 +109,7 @@ export class HUD extends Component {
      */
     public init(gameLoop: GameLoop): void {
         this.gameLoop = gameLoop;
-        this.refreshDisplay();
+        this.refreshAll();
     }
 
     /**
@@ -164,15 +164,24 @@ export class HUD extends Component {
     // ============= Display Updates =============
 
     /**
-     * Refresh all HUD displays
+     * Refresh all HUD displays (idempotent).
      */
-    public refreshDisplay(): void {
-        if (!this.gameLoop) return;
+    public refreshAll(): void {
+        if (!this.gameLoop || !this.node?.isValid) {
+            return;
+        }
 
         this.updateGold();
         this.updateDay();
         this.updatePhase();
         this.updateHp();
+    }
+
+    /**
+     * Backward-compatible alias.
+     */
+    public refreshDisplay(): void {
+        this.refreshAll();
     }
 
     /**
@@ -312,7 +321,7 @@ export class HUD extends Component {
      * Force refresh (call after game state changes)
      */
     public forceRefresh(): void {
-        this.refreshDisplay();
+        this.refreshAll();
     }
 
     /**
@@ -320,7 +329,7 @@ export class HUD extends Component {
      */
     public setUpdateInterval(interval: number): void {
         this.updateInterval = interval;
-        this.unschedule(this.refreshDisplay);
-        this.schedule(this.refreshDisplay, this.updateInterval);
+        this.unschedule(this.refreshAll);
+        this.schedule(this.refreshAll, this.updateInterval);
     }
 }

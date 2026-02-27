@@ -308,6 +308,15 @@ export class MainScene extends Component {
     private onStageTransitionSuccess(stage: SceneStage, source: string): void {
         this.syncPhaseWithStage(stage, source);
         this.applyStageVisibility(stage);
+        this.refreshHudAfterStageTransition(stage, source);
+    }
+
+    /**
+     * Refresh HUD after a successful stage transition.
+     */
+    private refreshHudAfterStageTransition(stage: SceneStage, source: string): void {
+        this.hud?.refreshAll();
+        console.log(`[MainScene] HUD refresh after stage transition (${source}): stage=${stage}, phase=${this.gameLoop.getPhase()}`);
     }
 
     /**
@@ -386,9 +395,8 @@ export class MainScene extends Component {
                 break;
         }
         
-        // Always show HUD
+        // Always show HUD (content refresh handled by onStageTransitionSuccess hook)
         this.setPanelVisible(this.hud?.node ?? null, true);
-        this.updateAllDisplays();
     }
 
     /**
@@ -938,9 +946,7 @@ export class MainScene extends Component {
      * Update gold display
      */
     private updateGoldDisplay(): void {
-        if (this.hud) {
-            this.hud.forceRefresh();
-        }
+        this.hud?.refreshAll();
     }
 
     /**
@@ -968,13 +974,10 @@ export class MainScene extends Component {
      * Update all displays
      */
     public updateAllDisplays(): void {
-        this.updateGoldDisplay();
         this.updateDayDisplay();
         this.updateMmrDisplay();
         this.updateRecordDisplay();
-        
-        // Force refresh HUD to update HP/Gold/Day
-        this.hud?.forceRefresh();
+        this.hud?.refreshAll();
     }
 
     // ============= Game State =============
