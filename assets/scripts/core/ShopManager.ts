@@ -19,11 +19,19 @@ export class ShopManager {
     private random: SeededRandom;
     private state: IShopState;
     private maxShopSlots: number = SHOP_SLOT_COUNT;
+    private currentDay: number = 1; // Track current day for item rarity filtering
 
     constructor(seed: number) {
         this.itemDB = getItemDB(seed);
         this.random = new SeededRandom(seed);
         this.state = this.createInitialShopState();
+    }
+
+    /**
+     * Set current day for item rarity filtering
+     */
+    public setDay(day: number): void {
+        this.currentDay = Math.max(1, Math.floor(day));
     }
 
     /**
@@ -40,9 +48,13 @@ export class ShopManager {
     /**
      * Generate random shop slots
      */
-    private generateShopSlots(): IShopSlot[] {
+    private generateShopSlots(day?: number): IShopSlot[] {
         const slots: IShopSlot[] = [];
-        const items = this.itemDB.randomPool(this.maxShopSlots, this.random.next() * 10000);
+        const effectiveDay = day ?? this.currentDay;
+        // Use day-gated random pool when day is provided
+        const items = day !== undefined 
+            ? this.itemDB.randomPoolByDay(this.maxShopSlots, day, this.random.next() * 10000)
+            : this.itemDB.randomPool(this.maxShopSlots, this.random.next() * 10000);
 
         for (let i = 0; i < this.maxShopSlots; i++) {
             const item = items[i];
@@ -160,12 +172,13 @@ export class ShopManager {
 
     /**
      * Refresh shop (does NOT deduct gold - caller handles gold)
+     * @param day Optional day number for item rarity filtering
      * Returns { success: boolean, newCost: number }
      * Locked slots are preserved (not replaced)
      */
-    public refreshResult(): { success: boolean; newCost: number } {
-        // Generate new slots
-        const newSlots = this.generateShopSlots();
+    public refreshResult(day?: number): { success: boolean; newCost: number } {
+        // Generate new slots with day-based filtering
+        const newSlots = this.generateShopSlots(day);
         
         // Preserve locked slots (they stay the same, not replaced)
         for (let i = 0; i < this.state.slots.length; i++) {

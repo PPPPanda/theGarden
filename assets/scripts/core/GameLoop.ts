@@ -79,6 +79,8 @@ export class GameLoop {
      */
     public startDay(): void {
         this.phase = GamePhase.Shop;
+        // Sync day to shop for item rarity filtering
+        this.shopManager.setDay(this.day);
         this.shopManager.reset();
     }
 
@@ -406,8 +408,8 @@ export class GameLoop {
         // Deduct gold
         this.playerGold -= cost;
 
-        // Refresh shop
-        const result = this.shopManager.refreshResult();
+        // Refresh shop with current day for item rarity filtering
+        const result = this.shopManager.refreshResult(this.day);
         return result.success;
     }
 
