@@ -159,6 +159,9 @@ export class ShopPanel extends Component {
     /** Hit padding in pixels */
     private readonly hitPadding: number = 4;
 
+    /** One-shot diagnostics flag for hit bounds logging */
+    private hasLoggedHitBoundsDiagnostics: boolean = false;
+
     // ============= Callbacks =============
 
     private onBuyCallback: ((slotIndex: number) => boolean) | null = null;
@@ -349,7 +352,17 @@ export class ShopPanel extends Component {
         const height = Math.max(1, halfH * 2 + this.hitPadding * 2);
 
         rootTransform.setContentSize(width, height);
-        console.log(`[ShopPanel] Tightened root touch bounds: ${width.toFixed(1)}x${height.toFixed(1)}`);
+
+        if (!this.hasLoggedHitBoundsDiagnostics) {
+            const world = rootTransform.getBoundingBoxToWorld();
+            console.log(
+                `[ShopPanel] HitBounds diagnostics ` +
+                `local=(${bounds.minX.toFixed(1)},${bounds.minY.toFixed(1)})-(${bounds.maxX.toFixed(1)},${bounds.maxY.toFixed(1)}) ` +
+                `size=${width.toFixed(1)}x${height.toFixed(1)} ` +
+                `world=(${world.x.toFixed(1)},${world.y.toFixed(1)})-(${(world.x + world.width).toFixed(1)},${(world.y + world.height).toFixed(1)})`
+            );
+            this.hasLoggedHitBoundsDiagnostics = true;
+        }
     }
 
     private computeLocalUnionBounds(nodes: Node[]): Bounds2D | null {
@@ -1031,6 +1044,7 @@ export class ShopPanel extends Component {
         this.interactiveHitNodes = [];
         this.dragTouchStartPos = null;
         this.dragStartSlotIndex = -1;
+        this.hasLoggedHitBoundsDiagnostics = false;
         this.onBuyCallback = null;
         this.onRefreshCallback = null;
         this.onLockCallback = null;
