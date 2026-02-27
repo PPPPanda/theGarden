@@ -415,6 +415,7 @@ export class BattleEngine {
      * Resolve a timeline event - execute all effects
      * Uses sourceId/sourceSide to find the triggering item,
      * applies effects to target.
+     * Only executes effects matching the trigger timing.
      */
     public resolveEvent(event: ITimelineEvent): void {
         // Use sourceId to find the triggering item
@@ -431,8 +432,13 @@ export class BattleEngine {
         }
 
         const targetSide = event.target;
+        
+        // Filter effects by trigger timing - only execute OnCooldownComplete effects
+        const matchingEffects = item.effects.filter(e => 
+            e.trigger === TriggerTiming.OnCooldownComplete || e.trigger === TriggerTiming.Passive
+        );
 
-        for (const effect of item.effects) {
+        for (const effect of matchingEffects) {
             switch (effect.type) {
                 case 'damage':
                     this.applyDamageWithShield(targetSide, effect.value);
@@ -441,16 +447,19 @@ export class BattleEngine {
                     this.applyHeal(targetSide, effect.value);
                     break;
                 case 'buff':
+                    // Dispatch buff to correct status type based on params
+                    const buffType = (effect.params?.statusType as StatusEffectType) ?? StatusEffectType.Shield;
                     this.addStatusEffect(sourceSide, {
-                        type: StatusEffectType.Shield,
+                        type: buffType,
                         duration: (effect.params?.duration as number) ?? 5,
                         value: effect.value,
                         sourceItemId: item.id,
                         stacks: effect.value
                     });
+                    console.log(`[BattleEngine] Applied buff: ${buffType} to ${sourceSide}`);
                     break;
                 case 'debuff':
-                    const debuffType = (effect.params?.statusType as StatusEffectType) || StatusEffectType.Poison;
+                    const debuffType = (effect.params?.statusType as StatusEffectType) ?? StatusEffectType.Poison;
                     this.addStatusEffect(targetSide, {
                         type: debuffType,
                         duration: (effect.params?.duration as number) ?? 3,
@@ -469,6 +478,9 @@ export class BattleEngine {
                         const healAmount = Math.min(effect.value, this.getMaxHp(targetSide) - this.getCurrentHp(targetSide));
                         this.applyHeal(sourceSide, healAmount);
                     }
+                    break;
+                default:
+                    console.warn(`[BattleEngine] Unknown effect type: ${effect.type}`);
                     break;
             }
         }
