@@ -6986,6 +6986,7 @@
     "goldLabelNode": {
       "__id__": 49
     },
+    "purchasedListNode": null,
     "slotColor": {
       "__type__": "cc.Color",
       "r": 60,
@@ -9633,8 +9634,8 @@
         "target": {
           "__id__": 8
         },
-        "component": "MainScene",
-        "_componentId": "",
+        "component": "",
+        "_componentId": "05842/dROxJi79uMr5Z+4kj",
         "handler": "enterGrid",
         "customEventData": ""
       }
@@ -9901,8 +9902,8 @@
         "target": {
           "__id__": 8
         },
-        "component": "MainScene",
-        "_componentId": "",
+        "component": "",
+        "_componentId": "05842/dROxJi79uMr5Z+4kj",
         "handler": "startBattle",
         "customEventData": ""
       }
@@ -10169,8 +10170,8 @@
         "target": {
           "__id__": 8
         },
-        "component": "MainScene",
-        "_componentId": "",
+        "component": "",
+        "_componentId": "05842/dROxJi79uMr5Z+4kj",
         "handler": "continueToNextDay",
         "customEventData": ""
       }
@@ -10302,6 +10303,15 @@
     },
     "shopPanel": {
       "__id__": 193
+    },
+    "enterGridBtn": {
+      "__id__": 265
+    },
+    "startBattleBtn": {
+      "__id__": 271
+    },
+    "continueNextDayBtn": {
+      "__id__": 277
     },
     "_id": "60tNSk06tGcZVH1NVdYImv"
   },
