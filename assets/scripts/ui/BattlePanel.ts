@@ -91,7 +91,13 @@ export class BattlePanel extends Component {
 
     // Callbacks
     private onContinueCallback: (() => void) | null = null;
-    private continueClickTarget: any = null; // Store click event target for cleanup
+    private continueClickTarget: Node | null = null;
+
+    // Floating text animation state
+    private activeFloatingTexts: Set<Node> = new Set();
+    private activeFloatingUpdaters: Set<(dt: number) => void> = new Set();
+    private readonly FLOAT_DURATION = 0.7;
+    private readonly FLOAT_DISTANCE = 80;
 
     // Colors
     private readonly PLAYER_COLOR = new Color(76, 175, 80, 255);    // Green
@@ -457,35 +463,35 @@ export class BattlePanel extends Component {
         }
 
         this.floatingTextLayer.addChild(floatNode);
+        this.activeFloatingTexts.add(floatNode);
 
-        // Animate using schedule - float up and fade out
-        let elapsed = 0;
-        const duration = 0.7;
         const startY = position.y;
         const startColor = label.color.clone();
+        let elapsed = 0;
 
-        const updateFloat = (dt: number) => {
+        const updateFloat = (dt: number): void => {
             elapsed += dt;
-            const t = elapsed / duration;
-            
+            const t = elapsed / this.FLOAT_DURATION;
+
             if (t >= 1) {
-                floatNode.destroy();
-                this.unschedule(updateFloat); // Use schedule cleanup instead of node.off
+                this.unschedule(updateFloat);
+                this.activeFloatingUpdaters.delete(updateFloat);
+                this.cleanupFloatingTextNode(floatNode);
                 return;
             }
 
-            // Float up
-            const newY = startY + t * 80;
+            // Float up over full duration.
+            const newY = startY + t * this.FLOAT_DISTANCE;
             floatNode.setPosition(position.x, newY, position.z);
 
-            // Fade out in last half
+            // Fade out in latter half to preserve existing visual timing.
             if (t > 0.5) {
                 const alpha = Math.floor(255 * (1 - (t - 0.5) * 2));
                 label.color = new Color(startColor.r, startColor.g, startColor.b, alpha);
             }
         };
 
-        // Use schedule instead of node.on('update')
+        this.activeFloatingUpdaters.add(updateFloat);
         this.schedule(updateFloat);
     }
 
@@ -502,6 +508,39 @@ export class BattlePanel extends Component {
      */
     public showHeal(amount: number, worldPos: Vec3): void {
         this.showFloatingText(`+${Math.round(amount)}`, worldPos, false);
+    }
+
+    /**
+     * Cleanup a single floating text node.
+     */
+    private cleanupFloatingTextNode(node: Node): void {
+        this.activeFloatingTexts.delete(node);
+
+        if (node.isValid) {
+            node.destroy();
+        }
+    }
+
+    /**
+     * Cleanup all active floating text animations and temp nodes.
+     */
+    private cleanupFloatingTexts(): void {
+        for (const updater of this.activeFloatingUpdaters) {
+            this.unschedule(updater);
+        }
+        this.activeFloatingUpdaters.clear();
+
+        for (const node of this.activeFloatingTexts) {
+            if (node.isValid) {
+                node.destroy();
+            }
+        }
+
+        this.activeFloatingTexts.clear();
+
+        if (this.floatingTextLayer?.isValid) {
+            this.floatingTextLayer.removeAllChildren();
+        }
     }
 
     // ============= Status Icons =============
@@ -724,7 +763,9 @@ export class BattlePanel extends Component {
         this.setPanelVisible(this.battleInfoPanel, false);
         this.setPanelVisible(this.eventLogPanel, false);
         this.setPanelVisible(this.resultPanel, false);
-        
+
+        this.cleanupFloatingTexts();
+
         this.battleEngine = null;
         this.currentBattleState = null;
         this.battleResult = null;
@@ -811,14 +852,7 @@ export class BattlePanel extends Component {
             this.continueClickTarget = null;
         }
         
-        // Clean up all scheduled callbacks (floating text animations)
-        this.unscheduleAllCallbacks();
-        
-        // Clean up floating text layer nodes if exists
-        if (this.floatingTextLayer) {
-            this.floatingTextLayer.destroyAllChildren();
-        }
-        
+        // hide() performs full animation/temp-node cleanup
         this.hide();
         this.gameLoop = null;
         this.battleEngine = null;
