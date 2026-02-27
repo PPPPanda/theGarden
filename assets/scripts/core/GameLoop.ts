@@ -223,6 +223,10 @@ export class GameLoop {
      */
     public startBattle(): void {
         this.phase = GamePhase.Battle;
+
+        // Reset settlement snapshot for this new battle instance.
+        this.battleResult = null;
+        this.lastBattleState = null;
         
         const playerItems = this.playerGrid.getAllItems();
         const enemyItems = this.enemyGrid.getAllItems();
@@ -243,18 +247,27 @@ export class GameLoop {
      * Run full battle
      */
     public runFullBattle(): IBattleState {
+        // Idempotency guard: if this battle has already been settled,
+        // return cached state and do not process rewards/stats again.
+        if (this.lastBattleState && this.battleResult) {
+            this.phase = GamePhase.Result;
+            return this.lastBattleState;
+        }
+
         if (!this.currentBattle) {
             this.startBattle();
         }
 
         const result = this.currentBattle!.runFullBattle();
         this.lastBattleState = result;
-        
-        // Process result
-        this.processBattleResult(result);
-        
+
+        // Settle exactly once for current battle instance.
+        if (!this.battleResult) {
+            this.processBattleResult(result);
+        }
+
         this.phase = GamePhase.Result;
-        
+
         return result;
     }
 

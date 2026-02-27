@@ -277,6 +277,7 @@ export class MainScene extends Component {
         
         if (result.ok) {
             this.applyStageVisibility(targetStage);
+            this.syncPhaseWithStage(targetStage, 'transitionToStage');
         }
         
         return result;
@@ -300,6 +301,44 @@ export class MainScene extends Component {
      */
     public canTransitionTo(targetStage: SceneStage): boolean {
         return this.stageMachine.canTransition(targetStage);
+    }
+
+    /**
+     * Ensure GamePhase stays aligned with SceneStage.
+     */
+    private syncPhaseWithStage(stage: SceneStage, source: string): void {
+        const expected = this.getExpectedPhaseForStage(stage);
+        if (!expected) {
+            return;
+        }
+
+        const current = this.gameLoop.getPhase();
+        if (current !== expected) {
+            console.warn(`[MainScene] Stage/Phase mismatch at ${source}: stage=${stage}, phase=${current}, expected=${expected}. Syncing phase.`);
+            this.gameLoop.setPhase(expected);
+        }
+
+        console.log(`[MainScene] ${source}: stage=${stage}, phase=${this.gameLoop.getPhase()}`);
+    }
+
+    /**
+     * Map scene stage to expected game phase.
+     */
+    private getExpectedPhaseForStage(stage: SceneStage): GamePhase | null {
+        switch (stage) {
+            case SceneStage.Loading:
+                return GamePhase.Loading;
+            case SceneStage.Shop:
+                return GamePhase.Shop;
+            case SceneStage.Grid:
+                return GamePhase.Grid;
+            case SceneStage.Battle:
+                return GamePhase.Battle;
+            case SceneStage.Result:
+                return GamePhase.Result;
+            default:
+                return null;
+        }
     }
 
     /**
@@ -506,26 +545,17 @@ export class MainScene extends Component {
      * Run full battle (legacy - prefer startBattle/finishBattle)
      */
     public runFullBattle() {
-        // Use proper state machine flow
+        // Use unified flow: startBattle -> finishBattle (finish resolves/settles exactly once)
         if (!this.startBattle()) {
             return null;
         }
-        
-        const result = this.gameLoop.runFullBattle();
-        
-        // Update battle panel UI
-        if (this.battlePanel) {
-            this.battlePanel.runFullBattle();
+
+        const finished = this.finishBattle();
+        if (!finished) {
+            return null;
         }
-        
-        // Transition to Result stage
-        this.finishBattle();
-        
-        // Update views
-        this.playerGridView.refresh();
-        this.enemyGridView.refresh();
-        
-        return result;
+
+        return this.gameLoop.getLastBattleState();
     }
 
     /**
@@ -644,11 +674,7 @@ export class MainScene extends Component {
         const currentStage = this.getCurrentStage();
         console.log(`[MainScene] ENTER_GRID touched! Current stage: ${currentStage}`);
         
-        // Sync with GameLoop phase
-        this.gameLoop.enterGridPhase();
-        console.log('[MainScene] Synced GameLoop.enterGridPhase()');
-        
-        // Call actual business method
+        // Call actual business method (includes phase sync)
         const success = this.enterGrid();
         console.log(`[MainScene] enterGrid() result: ${success ? 'SUCCESS' : 'FAILED'}`);
     }
@@ -742,27 +768,17 @@ export class MainScene extends Component {
      * Run full battle with UI (legacy method - prefer startBattle/finishBattle)
      */
     public runBattleWithUI() {
-        // Use proper state machine flow
+        // Use unified flow: startBattle -> finishBattle (finish resolves/settles exactly once)
         if (!this.startBattle()) {
             return null;
         }
-        
-        // Run full battle
-        const result = this.gameLoop.runFullBattle();
-        
-        // Update battle panel with result
-        if (this.battlePanel) {
-            this.battlePanel.runFullBattle();
+
+        const finished = this.finishBattle();
+        if (!finished) {
+            return null;
         }
-        
-        // Transition to Result
-        this.finishBattle();
-        
-        // Update views
-        this.playerGridView.refresh();
-        this.enemyGridView.refresh();
-        
-        return result;
+
+        return this.gameLoop.getLastBattleState();
     }
 
     /**
@@ -824,8 +840,9 @@ export class MainScene extends Component {
             return false;
         }
         
-        // Generate AI opponent
+        // Generate AI opponent exactly once per battle start entry
         this.gameLoop.generateAiOpponent();
+        console.log('[MainScene] startBattle: generateAiOpponent() called once');
         
         // Start battle in GameLoop
         this.gameLoop.startBattle();
@@ -845,11 +862,8 @@ export class MainScene extends Component {
     }
 
     /**
-     * Finish battle and show results (called when battle ends)
-     */
-    /**
-     * Finish battle and transition to Result stage
-     * Runs full battle to ensure battle result is computed
+     * Finish battle and transition to Result stage.
+     * Battle settlement is resolved through GameLoop.runFullBattle() with internal idempotency guards.
      */
     public finishBattle(): boolean {
         const current = this.getCurrentStage();
@@ -857,29 +871,30 @@ export class MainScene extends Component {
             console.warn('Cannot finish battle - not in Battle stage');
             return false;
         }
-        
-        // Run full battle to compute result (this processes battle and sets battleResult)
-        console.log('[MainScene] Running full battle to compute result...');
+
+        // Resolve/settle battle before entering Result stage.
         const battleState = this.gameLoop.runFullBattle();
-        
-        if (!battleState) {
-            console.warn('[MainScene] runFullBattle returned null');
-        } else {
-            console.log(`[MainScene] Battle result: ${battleState.result}`);
+        const battleResult = this.gameLoop.getBattleResult();
+
+        if (!battleResult) {
+            console.warn('[MainScene] finishBattle aborted: battleResult is null after settlement');
+            return false;
         }
-        
-        // Now transition to Result stage with computed result
+
+        console.log(`[MainScene] finishBattle settlement complete: result=${battleState.result}`);
+
+        // Push resolved data to battle panel without re-running settlement.
+        if (this.battlePanel) {
+            this.battlePanel.showResolvedResult(battleState, battleResult);
+        }
+
         const result = this.transitionToStage(SceneStage.Result);
         console.log(`[MainScene] finishBattle() transition: ${result.ok ? 'SUCCESS' : 'FAILED'}`);
-        
+
         // Update views after battle
         this.playerGridView.refresh();
         this.enemyGridView.refresh();
-        
-        // Verify battle result is available
-        const battleResult = this.gameLoop.getBattleResult();
-        console.log(`[MainScene] getBattleResult() available: ${battleResult !== null}`);
-        
+
         return result.ok;
     }
 
