@@ -3,7 +3,7 @@
  * Coordinates all game systems and UI
  */
 
-import { _decorator, Component, Node, Vec3, Button } from 'cc';
+import { _decorator, Component, Node, Vec3, Button, Color, Graphics } from 'cc';
 import { GameLoop, GamePhase, getGameLoop } from '../core/GameLoop';
 import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
@@ -17,8 +17,19 @@ import { IGridItem, IItemTemplate, IShopSlot } from '../core/types';
 
 const { ccclass, property } = _decorator;
 
+// Stage background colors
+const STAGE_BG_COLORS: Record<SceneStage, Color> = {
+    [SceneStage.Loading]: new Color(30, 30, 46, 255),      // Dark blue
+    [SceneStage.Shop]: new Color(255, 248, 225, 255),      // Warm yellow #FFF8E1
+    [SceneStage.Grid]: new Color(232, 245, 233, 255),      // Light green #E8F5E9
+    [SceneStage.Battle]: new Color(255, 235, 238, 255),    // Light red #FFEBEE
+    [SceneStage.Result]: new Color(227, 242, 253, 255),    // Light blue #E3F2FD
+};
+
 @ccclass('MainScene')
 export class MainScene extends Component {
+    // Background node reference
+    private backgroundNode: Node | null = null;
     // ============= Cocos Lifecycle =============
 
     /**
@@ -34,6 +45,9 @@ export class MainScene extends Component {
         
         // Initialize stage machine (start at Loading)
         this.stageMachine = new SceneFlowStateMachine(SceneStage.Loading);
+        
+        // Get Background node for stage-based color changes
+        this.backgroundNode = this.node.getChildByName('Background');
     }
 
     /**
@@ -403,6 +417,9 @@ export class MainScene extends Component {
      * Apply visibility for all panels based on stage
      */
     private applyStageVisibility(stage: SceneStage): void {
+        // Update background color based on stage
+        this.updateBackgroundColor(stage);
+        
         // Hide all panels first
         this.setPanelVisible(this.shopPanel?.node ?? null, false);
         this.setPanelVisible(this.gridPanel?.node ?? null, false);
@@ -448,6 +465,36 @@ export class MainScene extends Component {
         if (node) {
             node.active = visible;
         }
+    }
+
+    /**
+     * Update background color based on stage
+     */
+    private updateBackgroundColor(stage: SceneStage): void {
+        if (!this.backgroundNode) {
+            return;
+        }
+        
+        const graphics = this.backgroundNode.getComponent(Graphics);
+        if (!graphics) {
+            return;
+        }
+        
+        const color = STAGE_BG_COLORS[stage] || STAGE_BG_COLORS[SceneStage.Loading];
+        graphics.fillColor = color;
+        
+        // Redraw the background rectangle
+        const transform = this.backgroundNode.getComponent('cc.UITransform');
+        if (transform) {
+            const size = (transform as any).contentSize;
+            if (size) {
+                graphics.clear(false);
+                graphics.rect(-size.width / 2, -size.height / 2, size.width, size.height);
+                graphics.fill();
+            }
+        }
+        
+        console.log(`[MainScene] Background color updated for stage: ${stage}`);
     }
 
     /**
