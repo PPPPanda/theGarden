@@ -453,9 +453,13 @@ export class ShopPanel extends Component {
             return;
         }
 
+        // Calculate minimum width based on slot layout to ensure all 5 slots are covered
+        const slotLayoutWidth = this.slotCount * this.slotSize + (this.slotCount - 1) * this.slotGap;
+        const minWidth = Math.max(500, slotLayoutWidth + 40); // 500px minimum or slot layout + padding
+
         const halfW = Math.max(Math.abs(bounds.minX), Math.abs(bounds.maxX));
         const halfH = Math.max(Math.abs(bounds.minY), Math.abs(bounds.maxY));
-        const width = Math.max(1, halfW * 2 + this.hitPadding * 2);
+        const width = Math.max(minWidth, halfW * 2 + this.hitPadding * 2);
         const height = Math.max(1, halfH * 2 + this.hitPadding * 2);
 
         rootTransform.setContentSize(width, height);
