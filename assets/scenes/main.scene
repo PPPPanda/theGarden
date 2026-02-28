@@ -405,6 +405,9 @@
       },
       {
         "__id__": 37
+      },
+      {
+        "__id__": 302
       }
     ],
     "_prefab": {
@@ -1461,6 +1464,9 @@
       },
       {
         "__id__": 45
+      },
+      {
+        "__id__": 304
       }
     ],
     "_prefab": {
@@ -1700,6 +1706,9 @@
       },
       {
         "__id__": 193
+      },
+      {
+        "__id__": 303
       }
     ],
     "_prefab": {
@@ -7058,6 +7067,9 @@
       },
       {
         "__id__": 261
+      },
+      {
+        "__id__": 305
       }
     ],
     "_prefab": {
@@ -10668,5 +10680,109 @@
   {
     "__type__": "cc.PostSettingsInfo",
     "_toneMappingType": 0
+  },
+  {
+    "__type__": "cc.Graphics",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 9
+    },
+    "_enabled": true,
+    "_materials": [],
+    "_fillColor": {
+      "__type__": "cc.Color",
+      "r": 50,
+      "g": 50,
+      "b": 60,
+      "a": 200
+    },
+    "_strokeColor": {
+      "__type__": "cc.Color",
+      "r": 0,
+      "g": 0,
+      "b": 0,
+      "a": 255
+    },
+    "_lineWidth": 1,
+    "_id": "302"
+  },
+  {
+    "__type__": "cc.Graphics",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 48
+    },
+    "_enabled": true,
+    "_materials": [],
+    "_fillColor": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 248,
+      "b": 225,
+      "a": 200
+    },
+    "_strokeColor": {
+      "__type__": "cc.Color",
+      "r": 0,
+      "g": 0,
+      "b": 0,
+      "a": 255
+    },
+    "_lineWidth": 1,
+    "_id": "303"
+  },
+  {
+    "__type__": "cc.Graphics",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 40
+    },
+    "_enabled": true,
+    "_materials": [],
+    "_fillColor": {
+      "__type__": "cc.Color",
+      "r": 232,
+      "g": 245,
+      "b": 233,
+      "a": 200
+    },
+    "_strokeColor": {
+      "__type__": "cc.Color",
+      "r": 0,
+      "g": 0,
+      "b": 0,
+      "a": 255
+    },
+    "_lineWidth": 1,
+    "_id": "304"
+  },
+  {
+    "__type__": "cc.Graphics",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 195
+    },
+    "_enabled": true,
+    "_materials": [],
+    "_fillColor": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 235,
+      "b": 238,
+      "a": 200
+    },
+    "_strokeColor": {
+      "__type__": "cc.Color",
+      "r": 0,
+      "g": 0,
+      "b": 0,
+      "a": 255
+    },
+    "_lineWidth": 1,
+    "_id": "305"
   }
 ]
