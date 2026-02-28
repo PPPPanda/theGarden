@@ -64,3 +64,5 @@ devclaw.bak.*/
 # OS
 .DS_Store
 Thumbs.db
+tools/preview-ui-last.json
+assets/scripts/temp.meta
