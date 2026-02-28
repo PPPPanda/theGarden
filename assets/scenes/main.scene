@@ -9634,7 +9634,7 @@
         "target": {
           "__id__": 8
         },
-        "component": "05842/dROxJi79uMr5Z+4kj",
+        "component": "MainScene",
         "_componentId": "05842/dROxJi79uMr5Z+4kj",
         "handler": "enterGrid",
         "customEventData": ""
@@ -9902,7 +9902,7 @@
         "target": {
           "__id__": 8
         },
-        "component": "05842/dROxJi79uMr5Z+4kj",
+        "component": "MainScene",
         "_componentId": "05842/dROxJi79uMr5Z+4kj",
         "handler": "startBattle",
         "customEventData": ""
@@ -10170,7 +10170,7 @@
         "target": {
           "__id__": 8
         },
-        "component": "05842/dROxJi79uMr5Z+4kj",
+        "component": "MainScene",
         "_componentId": "05842/dROxJi79uMr5Z+4kj",
         "handler": "continueToNextDay",
         "customEventData": ""
