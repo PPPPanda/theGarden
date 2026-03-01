@@ -3,7 +3,7 @@
  * Coordinates all game systems and UI
  */
 
-import { _decorator, Component, Node, Vec3, Button, Color, Graphics } from 'cc';
+import { _decorator, Component, Node, Vec3, Button, Color, Graphics, UITransform } from 'cc';
 import { GameLoop, GamePhase, getGameLoop } from '../core/GameLoop';
 import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
@@ -48,6 +48,14 @@ export class MainScene extends Component {
         
         // Get Background node for stage-based color changes
         this.backgroundNode = this.node.getChildByName('Background');
+        
+        // Set background to cover full portrait screen (720x1280)
+        if (this.backgroundNode) {
+            const bgTransform = this.backgroundNode.getComponent(UITransform);
+            if (bgTransform) {
+                bgTransform.setContentSize(720, 1280);
+            }
+        }
     }
 
     /**
@@ -484,9 +492,9 @@ export class MainScene extends Component {
         graphics.fillColor = color;
         
         // Redraw the background rectangle
-        const transform = this.backgroundNode.getComponent('cc.UITransform');
+        const transform = this.backgroundNode.getComponent(UITransform);
         if (transform) {
-            const size = (transform as any).contentSize;
+            const size = transform.contentSize;
             if (size) {
                 graphics.clear(false);
                 graphics.rect(-size.width / 2, -size.height / 2, size.width, size.height);
