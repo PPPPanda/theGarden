@@ -32,7 +32,7 @@ export class ShopPanel extends Component {
     // ============= Layout Properties =============
 
     @property({ type: CCFloat, tooltip: 'Shop slot size in pixels' })
-    public slotSize: number = 80;
+    public slotSize: number = 120;
 
     @property({ type: CCFloat, tooltip: 'Gap between slots' })
     public slotGap: number = 10;
@@ -267,6 +267,15 @@ export class ShopPanel extends Component {
     }
 
     public start(): void {
+        // Set adaptive panel size based on slot count for portrait layout
+        const totalWidth = this.slotCount * this.slotSize + (this.slotCount - 1) * this.slotGap;
+        const panelWidth = Math.max(totalWidth + 40, 700); // padding
+        const panelHeight = 250;
+        const transform = this.node.getComponent(UITransform);
+        if (transform) {
+            transform.setContentSize(panelWidth, panelHeight);
+        }
+        
         this.resolveBindings();
         this.refreshInteractiveBoundsAndHitArea();
         this.ensurePurchasedListUI();
