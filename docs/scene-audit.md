@@ -117,14 +117,120 @@
 
 ## 3. 代码-场景一致性
 
-| 代码引用 | 场景节点 | 状态 |
-|----------|----------|------|
-| getComponent(HUD) | HUD 节点 | ✅ |
-| getComponent(ShopPanel) | ShopPanel 节点 | ✅ |
-| getComponent(GridPanelComp) | GridPanel 节点 | ✅ |
-| getComponent(BattlePanel) | BattlePanel 节点 | ✅ |
-| getChildByName('EnterGridBtn') | FlowControls/EnterGridBtn | ✅ |
-| getChildByName('StartBattleBtn') | FlowControls/StartBattleBtn | ✅ |
+### MainScene.ts @property 绑定状态
+
+| 行号 | 属性名 | 类型 | 绑定状态 | 场景节点 | 状态 |
+|------|--------|------|----------|----------|------|
+| 215 | playerGridNode | Node | ✅ 已绑定 | GridContainer | ✅ |
+| 218 | enemyGridNode | Node | ✅ 已绑定 | GridContainer | ✅ |
+| 221 | uiLayerNode | Node | ✅ 已绑定 | Root | ✅ |
+| 224 | battlePanel | BattlePanel | ✅ 已绑定 | BattlePanel (uuid: 59BYMkuKNPkL3/OZdCODX1) | ✅ |
+| 227 | screenAdapter | ScreenAdapter | ✅ 已绑定 | Root (uuid: 6ao1EQZQVDyJz8BBWHkdDm) | ✅ |
+| 230 | hud | HUD | ✅ 已绑定 | HUD (uuid: e4AQM9nYREQIMc2PVf7FPN) | ✅ |
+| 233 | hudTopNode | Node | ✅ 已绑定 | TopBar | ✅ |
+| 236 | hudBottomNode | Node | ✅ 已绑定 | HpBar | ✅ |
+| 239 | centerContentNode | Node | ✅ 已绑定 | GridPanel | ✅ |
+| 242 | gridPanel | GridPanelComp | ✅ 已绑定 | GridPanel (uuid: 29NR9uNARFe74z6MP2DQju) | ✅ |
+| 245 | shopPanel | ShopPanel | ✅ 已绑定 | ShopPanel (uuid: d1vBnIZx9EIYzBtuE+ShGh) | ✅ |
+| 250 | enterGridBtn | Node | ✅ 已绑定 | EnterGridBtn | ✅ |
+| 253 | startBattleBtn | Node | ✅ 已绑定 | StartBattleBtn | ✅ |
+| 256 | continueNextDayBtn | Node | ✅ 已绑定 | ContinueNextDayBtn | ✅ |
+
+### HUD.ts @property 绑定状态
+
+| 行号 | 属性名 | 类型 | 绑定状态 | 场景节点 | 状态 |
+|------|--------|------|----------|----------|------|
+| 25 | hpBarFill | Node | ✅ 已绑定 | HpBarFill | ✅ |
+| 29 | hpBarBg | Node | ✅ 已绑定 | HpBarBg | ✅ |
+| 33 | hpText | Node | ✅ 已绑定 | HpText | ✅ |
+| 37 | goldText | Node | ✅ 已绑定 | GoldText | ✅ |
+| 41 | dayText | Node | ✅ 已绑定 | DayText | ✅ |
+| 45 | phaseText | Node | ⚠️ 可选 | - | ⚠️ |
+| 49 | timerText | Node | ⚠️ 可选 | - | ⚠️ |
+
+### ShopPanel.ts @property 绑定状态
+
+| 行号 | 属性名 | 类型 | 绑定状态 | 场景节点 | 状态 |
+|------|--------|------|----------|----------|------|
+| 45 | slot0Icon | Node | ✅ 已绑定 | Slot1/Icon | ✅ |
+| 48 | slot0Price | Node | ✅ 已绑定 | Slot1/Price | ✅ |
+| 51 | slot0BuyBtn | Node | ✅ 已绑定 | Slot1/BuyButton | ✅ |
+| 54 | slot0LockBtn | Node | ✅ 已绑定 | Slot1/LockButton | ✅ |
+| 59-68 | slot1* | Node | ✅ 已绑定 | Slot2/* | ✅ |
+| 73-82 | slot2* | Node | ✅ 已绑定 | Slot3/* | ✅ |
+| 87-96 | slot3* | Node | ✅ 已绑定 | Slot4/* | ✅ |
+| 101-110 | slot4* | Node | ✅ 已绑定 | Slot5/* | ✅ |
+| 115 | refreshBtn | Node | ✅ 已绑定 | RefreshButton | ✅ |
+| 118 | goldLabelNode | Node | ✅ 已绑定 | GoldLabel | ✅ |
+| 121 | purchasedListNode | Node | ⚠️ 可选 | - | ⚠️ |
+
+### GridPanelComp.ts @property 绑定状态
+
+| 行号 | 属性名 | 类型 | 绑定状态 | 场景节点 | 状态 |
+|------|--------|------|----------|----------|------|
+| 27 | container | Node | ✅ 已绑定 | GridContainer | ✅ |
+| 30 | cellPrefab | Node | ⚠️ 可选 | - | ⚠️ |
+
+### BattlePanel.ts @property 绑定状态
+
+| 行号 | 属性名 | 类型 | 绑定状态 | 场景节点 | 状态 |
+|------|--------|------|----------|----------|------|
+| 34 | battleContainer | Node | ✅ 已绑定 | BattleContainer | ✅ |
+| 37 | battleInfoPanel | Node | ✅ 已绑定 | BattleInfoPanel | ✅ |
+| 40 | eventLogPanel | Node | ✅ 已绑定 | EventLogPanel | ✅ |
+| 43 | resultPanel | Node | ✅ 已绑定 | ResultPanel | ✅ |
+| 46 | playerHpBar | Node | ✅ 已绑定 | PlayerHpBar | ✅ |
+| 49 | enemyHpBar | Node | ✅ 已绑定 | EnemyHpBar | ✅ |
+| 52 | timerLabel | Node | ✅ 已绑定 | TimerLabel | ✅ |
+| 55 | resultTitleLabel | Node | ✅ 已绑定 | ResultTitleLabel | ✅ |
+| 58 | damageSummaryLabel | Node | ✅ 已绑定 | DamageSummaryLabel | ✅ |
+| 61 | rewardsLabel | Node | ✅ 已绑定 | RewardsLabel | ✅ |
+| 64 | continueButton | Node | ✅ 已绑定 | ContinueButton | ✅ |
+| 67 | timelineBar | Node | ✅ 已绑定 | TimelineBar | ✅ |
+| 70 | floatingTextLayer | Node | ✅ 已绑定 | FloatingTextLayer | ✅ |
+| 73 | playerStatusIcons | Node | ✅ 已绑定 | PlayerStatusIcons | ✅ |
+| 76 | enemyStatusIcons | Node | ✅ 已绑定 | EnemyStatusIcons | ✅ |
+
+### 问题检查结果
+
+#### Ghost References (代码声明但场景未绑定)
+| 文件 | 行号 | 属性名 | 问题描述 |
+|------|------|--------|----------|
+| HUD.ts | 45 | phaseText | 可选属性，场景未绑定 |
+| HUD.ts | 49 | timerText | 可选属性，场景未绑定 |
+| ShopPanel.ts | 121 | purchasedListNode | 可选属性，场景未绑定 |
+| GridPanelComp.ts | 30 | cellPrefab | 可选属性，场景未绑定 |
+
+**结论**: 无 Ghost References（所有未绑定属性均为可选属性）
+
+#### Dead Nodes (场景存在但无代码引用)
+| 节点 | 路径 | 状态 |
+|------|------|------|
+| Main Camera | Canvas/Main Camera | ✅ 结构必需 |
+| GridContainer | Canvas/Root/GridPanel/GridContainer | ✅ 被代码使用 |
+| SlotList | Canvas/Root/ShopPanel/SlotList | ✅ 被代码遍历 |
+| EventLogPlaceholder | Canvas/Root/BattlePanel/... | ✅ 可选日志 |
+
+**结论**: 无 Dead Nodes（所有节点均有代码引用或为结构必需）
+
+#### 组件类型不匹配
+| 检查项 | 代码调用 | 场景组件 | 状态 |
+|--------|----------|----------|------|
+| Label 组件 | goldText.getComponent(Label) | GoldText 有 Label | ✅ |
+| Label 组件 | dayText.getComponent(Label) | DayText 有 Label | ✅ |
+| Label 组件 | hpText.getComponent(Label) | HpText 有 Label | ✅ |
+| Label 组件 | timerLabel.getComponent(Label) | TimerLabel 有 Label | ✅ |
+
+**结论**: 无组件类型不匹配
+
+### 一致性总结
+
+| 检查项 | 状态 |
+|--------|------|
+| @property 绑定完整性 | ✅ 100% (可选属性除外) |
+| Ghost References | ✅ 无 |
+| Dead Nodes | ✅ 无 |
+| 组件类型匹配 | ✅ |
 
 ## 4. 审查结论
 
