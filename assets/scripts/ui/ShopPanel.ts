@@ -1485,8 +1485,18 @@ export class ShopPanel extends Component {
             }
         }
 
-        // Update lock button visual
+        // Update lock button visibility and position
         if (binding.lockBtn) {
+            // Only show lock button when slot is locked
+            binding.lockBtn.active = slot.locked;
+            
+            // Ensure small size (24x24) in top-right corner
+            const lockTransform = binding.lockBtn.getComponent(UITransform);
+            if (lockTransform) {
+                lockTransform.setContentSize(24, 24);
+            }
+            binding.lockBtn.setPosition(this.slotSize / 2 - 14, this.slotSize / 2 - 10, 0);
+            
             const label = this.resolveNodeLabel(binding.lockBtn, '_lockLabel');
             if (label) {
                 label.string = slot.locked ? '🔒' : '🔓';
@@ -1494,10 +1504,9 @@ export class ShopPanel extends Component {
             }
         }
 
-        // Update buy button interactivity - keep listener, visual feedback only
+        // Update buy button visibility - hide when purchased
         if (binding.buyBtn) {
-            // Visual feedback handled in icon/price update
-            // Click handler checks purchased state in handleBuy()
+            binding.buyBtn.active = !slot.purchased;
         }
 
         // Update slot background color via Sprite on bg node
