@@ -3,7 +3,7 @@
  * Coordinates all game systems and UI
  */
 
-import { _decorator, Component, Node, Vec3, Button, Color, Graphics, UITransform } from 'cc';
+import { _decorator, Component, Node, Vec3, Button, Color, Graphics, UITransform, Label } from 'cc';
 import { GameLoop, GamePhase, getGameLoop } from '../core/GameLoop';
 import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
@@ -757,6 +757,11 @@ export class MainScene extends Component {
             }
         }
         
+        // Draw button backgrounds
+        this.drawButtonBackground(enterGridBtn, new Color(76, 175, 80, 255));   // Green
+        this.drawButtonBackground(startBattleBtn, new Color(33, 150, 243, 255));   // Blue
+        this.drawButtonBackground(continueNextDayBtn, new Color(255, 152, 0, 255)); // Orange
+        
         // Register backup TOUCH_END listeners and store references for cleanup
         if (enterGridBtn) {
             this._enterGridBtn = enterGridBtn;
@@ -778,6 +783,42 @@ export class MainScene extends Component {
         
         this._backupInputRegistered = true;
         console.log('[MainScene] Backup input handlers setup complete');
+    }
+
+    /**
+     * Draw button background using Graphics component
+     */
+    private drawButtonBackground(btnNode: Node | null, color: Color): void {
+        if (!btnNode) return;
+        
+        // Get or add Graphics component
+        let graphics = btnNode.getComponent(Graphics);
+        if (!graphics) {
+            graphics = btnNode.addComponent(Graphics);
+        }
+        
+        // Set UITransform size for proper touch area
+        const transform = btnNode.getComponent(UITransform);
+        if (transform) {
+            transform.setContentSize(200, 44);
+        }
+        
+        // Draw rounded rectangle background
+        graphics.clear(false);
+        graphics.fillColor = color;
+        graphics.roundRect(-100, -22, 200, 44, 8);
+        graphics.fill();
+        
+        // Update label color to white for contrast
+        const labelNode = btnNode.getChildByName('label')
+            ?? btnNode.getChildByName('EnterGridLabel')
+            ?? btnNode.getChildByName('StartBattleLabel')
+            ?? btnNode.getChildByName('ContinueNextDayLabel')
+            ?? btnNode;
+        const label = labelNode.getComponent(Label);
+        if (label) {
+            label.color = new Color(255, 255, 255, 255);
+        }
     }
 
     // Backup touch handlers - call actual business methods
