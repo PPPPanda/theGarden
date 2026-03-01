@@ -268,9 +268,10 @@ export class ShopPanel extends Component {
 
     public start(): void {
         // Set adaptive panel size based on slot count for portrait layout
+        // Ensure all 5 slots fit within 720px viewport
         const totalWidth = this.slotCount * this.slotSize + (this.slotCount - 1) * this.slotGap;
-        const panelWidth = Math.max(totalWidth + 40, 700); // padding
-        const panelHeight = 250;
+        const panelWidth = Math.max(totalWidth + 60, 720); // Use full viewport width with padding
+        const panelHeight = 300; // Increased height to fit all slots
         const transform = this.node.getComponent(UITransform);
         if (transform) {
             transform.setContentSize(panelWidth, panelHeight);

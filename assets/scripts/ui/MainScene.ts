@@ -757,10 +757,12 @@ export class MainScene extends Component {
             }
         }
         
-        // Draw button backgrounds
-        this.drawButtonBackground(enterGridBtn, new Color(76, 175, 80, 255));   // Green
-        this.drawButtonBackground(startBattleBtn, new Color(33, 150, 243, 255));   // Blue
-        this.drawButtonBackground(continueNextDayBtn, new Color(255, 152, 0, 255)); // Orange
+        // Draw button backgrounds with delay to ensure UITransform is ready
+        this.scheduleOnce(() => {
+            this.drawButtonBackground(enterGridBtn, new Color(76, 175, 80, 255));   // Green
+            this.drawButtonBackground(startBattleBtn, new Color(33, 150, 243, 255));   // Blue
+            this.drawButtonBackground(continueNextDayBtn, new Color(255, 152, 0, 255)); // Orange
+        }, 0.1);
         
         // Register backup TOUCH_END listeners and store references for cleanup
         if (enterGridBtn) {
