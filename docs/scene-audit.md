@@ -115,7 +115,7 @@
 - 无双渲染组件违规 (如 Graphics + Sprite)
 - ✅ 通过
 
-## 3. 代码-场景一致性
+## Section 2: 代码-场景一致性
 
 ### MainScene.ts @property 绑定状态
 
