@@ -111,8 +111,32 @@ export class BattlePanel extends Component {
      * onLoad - Called when component is loaded
      */
     onLoad(): void {
+        // Draw panel background
+        this.drawPanelBackground();
+        
         // Initialize UI elements
         this.initializeUI();
+    }
+
+    /**
+     * Draw panel background using Graphics
+     */
+    private drawPanelBackground(): void {
+        const graphics = this.node.getComponent(Graphics);
+        if (!graphics) return;
+        
+        const transform = this.node.getComponent(UITransform);
+        if (!transform) return;
+        
+        const size = transform.contentSize;
+        const w = size.width;
+        const h = size.height;
+        
+        // Draw light red background for Battle stage
+        graphics.clear(false);
+        graphics.fillColor = new Color(255, 235, 238, 200); // #FFEBEE light red
+        graphics.rect(-w / 2, -h / 2, w, h);
+        graphics.fill();
     }
 
     /**

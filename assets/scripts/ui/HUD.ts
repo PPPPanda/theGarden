@@ -89,8 +89,32 @@ export class HUD extends Component {
     // ============= Lifecycle =============
 
     onLoad(): void {
+        // Draw panel background
+        this.drawPanelBackground();
+        
         // Draw initial HP bar graphics (bg + fill) using scene-bound nodes
         this.initHpBarGraphics();
+    }
+
+    /**
+     * Draw panel background using Graphics
+     */
+    private drawPanelBackground(): void {
+        const graphics = this.node.getComponent(Graphics);
+        if (!graphics) return;
+        
+        const transform = this.node.getComponent(UITransform);
+        if (!transform) return;
+        
+        const size = transform.contentSize;
+        const w = size.width;
+        const h = size.height;
+        
+        // Draw semi-transparent dark background
+        graphics.clear(false);
+        graphics.fillColor = new Color(50, 50, 60, 200);
+        graphics.rect(-w / 2, -h / 2, w, h);
+        graphics.fill();
     }
 
     start(): void {

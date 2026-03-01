@@ -276,11 +276,35 @@ export class ShopPanel extends Component {
             transform.setContentSize(panelWidth, panelHeight);
         }
         
+        // Draw panel background
+        this.drawPanelBackground();
+        
         this.resolveBindings();
         this.refreshInteractiveBoundsAndHitArea();
         this.ensurePurchasedListUI();
         this.wireEvents();
         this.refreshShopUI();
+    }
+
+    /**
+     * Draw panel background using Graphics
+     */
+    private drawPanelBackground(): void {
+        const graphics = this.node.getComponent(Graphics);
+        if (!graphics) return;
+        
+        const transform = this.node.getComponent(UITransform);
+        if (!transform) return;
+        
+        const size = transform.contentSize;
+        const w = size.width;
+        const h = size.height;
+        
+        // Draw warm yellow background for Shop stage
+        graphics.clear(false);
+        graphics.fillColor = new Color(255, 248, 225, 200); // #FFF8E1 warm yellow
+        graphics.rect(-w / 2, -h / 2, w, h);
+        graphics.fill();
     }
 
     public onEnable(): void {

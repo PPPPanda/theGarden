@@ -4,7 +4,7 @@
  * All drag logic is delegated to GridDragController.
  */
 
-import { _decorator, Component, Node, Sprite, Label, Color, UITransform, Vec3, input, CCFloat } from 'cc';
+import { _decorator, Component, Node, Sprite, Label, Color, UITransform, Vec3, input, CCFloat, Graphics } from 'cc';
 import { GridManager } from '../core/GridManager';
 import { ItemDB } from '../core/ItemDB';
 import { GameLoop } from '../core/GameLoop';
@@ -110,9 +110,33 @@ export class GridPanelComp extends Component {
     }
 
     public onLoad(): void {
+        // Draw panel background
+        this.drawPanelBackground();
+        
         if (!this.gridManager && !this.gridView) {
             this.createCells();
         }
+    }
+
+    /**
+     * Draw panel background using Graphics
+     */
+    private drawPanelBackground(): void {
+        const graphics = this.node.getComponent(Graphics);
+        if (!graphics) return;
+        
+        const transform = this.node.getComponent(UITransform);
+        if (!transform) return;
+        
+        const size = transform.contentSize;
+        const w = size.width;
+        const h = size.height;
+        
+        // Draw light green background for Grid stage
+        graphics.clear(false);
+        graphics.fillColor = new Color(232, 245, 233, 200); // #E8F5E9 light green
+        graphics.rect(-w / 2, -h / 2, w, h);
+        graphics.fill();
     }
 
     private initDragController(): void {
