@@ -788,7 +788,8 @@ export class MainScene extends Component {
     }
 
     /**
-     * Draw button background using Sprite (works better with screenshot rendering)
+     * Draw button background using a child node with Graphics
+     * This avoids the spriteFrame issue by creating a dedicated background node
      */
     private drawButtonBackground(btnNode: Node | null, color: Color): void {
         if (!btnNode) return;
@@ -799,14 +800,29 @@ export class MainScene extends Component {
             transform.setContentSize(200, 44);
         }
         
-        // Use Sprite component instead of Graphics for better screenshot rendering
-        let sprite = btnNode.getComponent(Sprite);
-        if (!sprite) {
-            sprite = btnNode.addComponent(Sprite);
+        // Create or get background child node
+        let bgNode = btnNode.getChildByName('_btnBackground');
+        if (!bgNode) {
+            bgNode = new Node('_btnBackground');
+            btnNode.addChild(bgNode);
+            
+            // Add UITransform
+            const bgTransform = bgNode.addComponent(UITransform);
+            bgTransform.setContentSize(200, 44);
+            bgNode.setPosition(0, 0, 0);
+            
+            // Add Graphics component
+            bgNode.addComponent(Graphics);
         }
         
-        // Set sprite color (use white sprite with tint)
-        sprite.color = color;
+        // Draw background with Graphics
+        const graphics = bgNode.getComponent(Graphics);
+        if (graphics) {
+            graphics.clear(false);
+            graphics.fillColor = color;
+            graphics.roundRect(-100, -22, 200, 44, 8);
+            graphics.fill();
+        }
         
         // Update label color to white for contrast
         const labelNode = btnNode.getChildByName('label')
