@@ -1,6 +1,6 @@
 # Scene Audit Report
 
-## 1. 节点深度检查
+## Section 1: 节点属性审计
 
 | 节点路径 | Position | ContentSize | Anchor | Components | 状态 |
 |---------|----------|-------------|--------|------------|------|
