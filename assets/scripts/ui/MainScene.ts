@@ -3,7 +3,7 @@
  * Coordinates all game systems and UI
  */
 
-import { _decorator, Component, Node, Vec3, Button, Color, Graphics, UITransform, Label } from 'cc';
+import { _decorator, Component, Node, Vec3, Button, Color, Graphics, UITransform, Label, Sprite } from 'cc';
 import { GameLoop, GamePhase, getGameLoop } from '../core/GameLoop';
 import { ShopManager } from '../core/ShopManager';
 import { GridView } from './GridView';
@@ -788,16 +788,10 @@ export class MainScene extends Component {
     }
 
     /**
-     * Draw button background using Graphics component
+     * Draw button background using Sprite (works better with screenshot rendering)
      */
     private drawButtonBackground(btnNode: Node | null, color: Color): void {
         if (!btnNode) return;
-        
-        // Get or add Graphics component
-        let graphics = btnNode.getComponent(Graphics);
-        if (!graphics) {
-            graphics = btnNode.addComponent(Graphics);
-        }
         
         // Set UITransform size for proper touch area
         const transform = btnNode.getComponent(UITransform);
@@ -805,11 +799,14 @@ export class MainScene extends Component {
             transform.setContentSize(200, 44);
         }
         
-        // Draw rounded rectangle background
-        graphics.clear(false);
-        graphics.fillColor = color;
-        graphics.roundRect(-100, -22, 200, 44, 8);
-        graphics.fill();
+        // Use Sprite component instead of Graphics for better screenshot rendering
+        let sprite = btnNode.getComponent(Sprite);
+        if (!sprite) {
+            sprite = btnNode.addComponent(Sprite);
+        }
+        
+        // Set sprite color (use white sprite with tint)
+        sprite.color = color;
         
         // Update label color to white for contrast
         const labelNode = btnNode.getChildByName('label')
