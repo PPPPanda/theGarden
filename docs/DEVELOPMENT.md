@@ -1,6 +1,6 @@
 # theGarden — 项目开发文档
 
-> 最后更新：2026-02-28
+> 最后更新：2026-03-09
 > 当前版本：M3 完成（Cocos 场景集成）
 
 ---
@@ -169,6 +169,18 @@ Result → Shop（Day+1）
 - 阶段切换时激活/隐藏对应面板
 - 按钮回调绑定（EnterGrid / StartBattle / ContinueNextDay）
 - 商店购买/刷新/锁定事件代理
+- 使用 `Background` 节点上的 `cc.Graphics` 按阶段绘制全屏背景色（720×1280）
+
+**阶段背景色绘制**：
+- `onLoad()` 会解析 `Background` 节点，统一设置 `UITransform` 为 `720×1280`，并立即绘制 `Loading` 阶段背景
+- `drawStageBackground(stage)` 会确保 `Background` 节点的锚点为 `(0,0)`、位置对齐到画布左下角，再执行 `graphics.clear() → fillColor → rect(0,0,w,h) → fill()`
+- `transitionToStage()` / `advanceToNextStage()` 成功后都会通过统一成功钩子 `onStageTransitionSuccess()` 重绘阶段背景
+- 颜色映射由 `STAGE_BG_COLORS` 统一定义：
+  - `Loading` → 深蓝 `rgb(30,30,46)`
+  - `Shop` → 暖黄 `#FFF8E1`
+  - `Grid` → 浅绿 `#E8F5E9`
+  - `Battle` → 浅红 `#FFEBEE`
+  - `Result` → 浅蓝 `#E3F2FD`
 
 **面板激活矩阵**：
 
@@ -279,8 +291,10 @@ Pipeline CI Agent 执行 7 层验证：
 3. **TypeScript 编译**：`npx tsc --noEmit`
 4. **2.x 语法门禁**：grep 禁止 `cc.Class`/`cc.loader`/`require()` 等
 5. **Cocos Editor 运行时**：刷新资产 + 打开场景 + 检查错误日志
-6. **Preview 运行时**：控制台 ERROR 检查 + 核心依赖非 null 验证
-7. **UI 交互验证**：触摸区域重叠检测 + 场景切换 + 战斗触发
+6. **Preview 运行时**：控制台 ERROR 检查 + 核心依赖非 null 验证；预览脚本需先探测健康端点，确认 `globalThis.cc` 与场景已加载，不能只以 `domcontentloaded` 作为成功条件
+7. **UI 交互验证**：触摸区域重叠检测 + 场景切换 + 战斗触发；若某个 7456 端点存在 `system.js` 500 / `System is not defined`，应自动切换到下一个可用端点而非直接判业务失败
+8. **启动场景配置**：`settings/v2/packages/builder.json` 必须维护 `startScene`。若该字段为空，Preview 会出现 `cc` 已初始化但 `cc.director.getScene()` 仍为 `null` 的假活状态，所有运行时/交互验收都会失败
+9. **Preview 场景兜底**：CI 侧 preview 脚本允许在 `cc` 已初始化但 scene 为空时，显式执行 `cc.director.loadScene('main')` 作为自动化预览启动步骤；这不是放宽验收，而是把“打开主场景再测”固化到脚本里
 
 ---
 

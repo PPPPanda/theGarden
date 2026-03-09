@@ -6,7 +6,7 @@
  *   node tools/preview-console.js [url] [--wait <ms>] [--follow]
  * 
  * Defaults:
- *   url:   http://192.168.10.100:7456
+ *   url:   auto-probe healthy preview endpoint (127.0.0.1 / localhost / 192.168.10.100)
  *   wait:  5000ms (time to wait after page load before exiting)
  *   follow: keep running and stream logs until Ctrl+C
  * 
@@ -16,10 +16,11 @@
  */
 
 const puppeteer = require('puppeteer');
+const { findHealthyPreviewUrl, installPreviewBootstrap, waitForPreviewRuntime } = require('./preview-common');
 
 // Parse args
 const args = process.argv.slice(2);
-let url = 'http://192.168.10.100:7456';
+let preferredUrl = null;
 let waitMs = 5000;
 let follow = false;
 
@@ -30,7 +31,7 @@ for (let i = 0; i < args.length; i++) {
     } else if (args[i] === '--follow' || args[i] === '-f') {
         follow = true;
     } else if (!args[i].startsWith('-')) {
-        url = args[i];
+        preferredUrl = args[i];
     }
 }
 
@@ -71,9 +72,16 @@ function formatLog(type, text) {
             ],
         });
 
-        const page = await browser.newPage();
+        const selected = await findHealthyPreviewUrl(browser, {
+            preferredUrl,
+            navigationTimeoutMs: 15000,
+            runtimeTimeoutMs: 8000,
+        });
 
-        // Capture console messages
+        const page = await browser.newPage();
+        await installPreviewBootstrap(page);
+
+        // Capture console messages only after a healthy preview endpoint is selected.
         page.on('console', (msg) => {
             const type = TYPE_MAP[msg.type()] || msg.type().toUpperCase();
             const text = msg.text();
@@ -90,14 +98,22 @@ function formatLog(type, text) {
             formatLog('REQUEST_FAIL', `${req.method()} ${req.url()} — ${req.failure()?.errorText || 'unknown'}`);
         });
 
-        console.error(`[preview-console] Opening ${url} ...`);
-        
-        await page.goto(url, { 
-            waitUntil: 'domcontentloaded',
-            timeout: 15000 
+        // Capture HTTP 4xx/5xx responses from the selected preview only.
+        page.on('response', (response) => {
+            if (response.status() >= 400) {
+                formatLog('HTTP_ERROR', `${response.status()} ${response.request().method()} ${response.url()}`);
+            }
         });
 
-        console.error(`[preview-console] Page loaded. Capturing console output...`);
+        console.error(`[preview-console] Opening healthy preview ${selected.url} ...`);
+
+        await page.goto(selected.url, {
+            waitUntil: 'domcontentloaded',
+            timeout: 15000,
+        });
+        await waitForPreviewRuntime(page, 8000);
+
+        console.error(`[preview-console] Page loaded with runtime scene=${selected.runtime.sceneName}. Capturing console output...`);
 
         // Take screenshot after initial load
         await new Promise(r => setTimeout(r, 3000));

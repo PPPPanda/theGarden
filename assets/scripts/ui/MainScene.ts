@@ -26,6 +26,9 @@ const STAGE_BG_COLORS: Record<SceneStage, Color> = {
     [SceneStage.Result]: new Color(227, 242, 253, 255),    // Light blue #E3F2FD
 };
 
+const BACKGROUND_WIDTH = 720;
+const BACKGROUND_HEIGHT = 1280;
+
 @ccclass('MainScene')
 export class MainScene extends Component {
     // Background node reference
@@ -47,14 +50,12 @@ export class MainScene extends Component {
         this.stageMachine = new SceneFlowStateMachine(SceneStage.Loading);
         
         // Get Background node for stage-based color changes
-        this.backgroundNode = this.node.getChildByName('Background');
+        this.backgroundNode = this.resolveBackgroundNode();
         
-        // Set background to cover full portrait screen (720x1280)
+        // Set background to cover the full portrait screen and draw the initial Loading color
         if (this.backgroundNode) {
-            const bgTransform = this.backgroundNode.getComponent(UITransform);
-            if (bgTransform) {
-                bgTransform.setContentSize(720, 1280);
-            }
+            this.configureBackgroundNodeLayout();
+            this.drawStageBackground(SceneStage.Loading);
         }
     }
 
@@ -333,6 +334,7 @@ export class MainScene extends Component {
     private onStageTransitionSuccess(stage: SceneStage, source: string): void {
         this.syncPhaseWithStage(stage, source);
         this.assertStagePhaseConsistency(stage, source);
+        this.drawStageBackground(stage);
         this.applyStageVisibility(stage);
         this.refreshHudAfterStageTransition(stage, source);
         this.logUiClosureCheckpoint(stage, source);
@@ -425,9 +427,6 @@ export class MainScene extends Component {
      * Apply visibility for all panels based on stage
      */
     private applyStageVisibility(stage: SceneStage): void {
-        // Update background color based on stage
-        this.updateBackgroundColor(stage);
-        
         // Hide all panels first
         this.setPanelVisible(this.shopPanel?.node ?? null, false);
         this.setPanelVisible(this.gridPanel?.node ?? null, false);
@@ -476,33 +475,75 @@ export class MainScene extends Component {
     }
 
     /**
-     * Update background color based on stage
+     * Resolve the stage background node from either the current node or its parent Canvas.
      */
-    private updateBackgroundColor(stage: SceneStage): void {
+    private resolveBackgroundNode(): Node | null {
+        const directChild = this.node.getChildByName('Background');
+        if (directChild) {
+            return directChild;
+        }
+
+        return this.node.parent?.getChildByName('Background') ?? null;
+    }
+
+    /**
+     * Configure the Background node so a (0,0,w,h) rect fills the portrait viewport.
+     */
+    private configureBackgroundNodeLayout(): void {
         if (!this.backgroundNode) {
             return;
         }
-        
-        const graphics = this.backgroundNode.getComponent(Graphics);
+
+        const transform = this.backgroundNode.getComponent(UITransform) ?? this.backgroundNode.addComponent(UITransform);
+        if (typeof transform.setAnchorPoint === 'function') {
+            transform.setAnchorPoint(0, 0);
+        } else {
+            transform.anchorPoint = { x: 0, y: 0 };
+        }
+        transform.setContentSize(BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
+
+        // Canvas children are centered in this scene, so move the background to bottom-left.
+        this.backgroundNode.setPosition(-BACKGROUND_WIDTH / 2, -BACKGROUND_HEIGHT / 2, 0);
+    }
+
+    /**
+     * Ensure Background has a Graphics component for stage-color rendering.
+     */
+    private ensureBackgroundGraphics(): Graphics | null {
+        if (!this.backgroundNode) {
+            return null;
+        }
+
+        const existing = this.backgroundNode.getComponent(Graphics);
+        if (existing) {
+            return existing;
+        }
+
+        return this.backgroundNode.addComponent(Graphics);
+    }
+
+    /**
+     * Draw the stage background using a full-screen portrait rectangle.
+     */
+    private drawStageBackground(stage: SceneStage): void {
+        if (!this.backgroundNode) {
+            return;
+        }
+
+        this.configureBackgroundNodeLayout();
+
+        const graphics = this.ensureBackgroundGraphics();
         if (!graphics) {
             return;
         }
-        
-        const color = STAGE_BG_COLORS[stage] || STAGE_BG_COLORS[SceneStage.Loading];
+
+        const color = STAGE_BG_COLORS[stage] ?? STAGE_BG_COLORS[SceneStage.Loading];
+        graphics.clear();
         graphics.fillColor = color;
-        
-        // Redraw the background rectangle
-        const transform = this.backgroundNode.getComponent(UITransform);
-        if (transform) {
-            const size = transform.contentSize;
-            if (size) {
-                graphics.clear(false);
-                graphics.rect(-size.width / 2, -size.height / 2, size.width, size.height);
-                graphics.fill();
-            }
-        }
-        
-        console.log(`[MainScene] Background color updated for stage: ${stage}`);
+        graphics.rect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
+        graphics.fill();
+
+        console.log(`[MainScene] Background color drawn for stage: ${stage}`);
     }
 
     /**

@@ -75,6 +75,7 @@ theGarden/
 │   ├── core/                     # 核心逻辑测试（116 cases）
 │   └── utils/                    # 工具类测试
 ├── tools/                        # CI 工具脚本
+│   ├── preview-common.js         # 预览端点探活 / runtime 健康检查
 │   ├── preview-console.js        # 预览控制台捕获
 │   ├── preview-debug.js          # 运行时状态检查
 │   └── preview-ui-test.js        # UI 交互验证
@@ -159,6 +160,10 @@ npx tsc --noEmit
 ### 预览
 
 在 Cocos Creator 中打开 `assets/scenes/main.scene`，点击预览按钮，或访问 `http://localhost:7456`。
+
+仓库内的 preview 调试脚本会优先探测**健康的**预览端点（默认依次尝试 `127.0.0.1` / `localhost` / `192.168.10.100`），并要求 `globalThis.cc` 与场景运行时可用；仅 `domcontentloaded` 成功但 `system.js` 500 的坏端点会被自动判为不可用。
+
+另外，`settings/v2/packages/builder.json` 必须配置 `startScene`（当前为 `db://assets/scenes/main.scene`），否则 Preview 只会完成 engine 初始化而不会真正加载场景，`cc.director.getScene()` 会一直是 `null`。为兼容 Editor 未及时刷新该设置的情况，preview 脚本也会在运行时兜底尝试 `loadScene('main')`。
 
 ## 开发
 

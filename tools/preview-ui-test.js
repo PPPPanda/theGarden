@@ -1,28 +1,20 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { delay, findHealthyPreviewUrl, installPreviewBootstrap, waitForPreviewRuntime } = require('./preview-common');
 
 const SNAPSHOT_PATH = path.join(__dirname, 'preview-ui-last.json');
 const STRICT_STAGE_SWITCH = process.env.UI_TEST_STRICT_STAGE === '1';
 
-const CANDIDATE_URLS = [
-  process.env.PREVIEW_URL,
-  'http://127.0.0.1:7456',
-  'http://localhost:7456',
-  'http://192.168.10.100:7456',
-].filter(Boolean);
+async function openPreview(browser, page) {
+  const selected = await findHealthyPreviewUrl(browser, {
+    navigationTimeoutMs: 15000,
+    runtimeTimeoutMs: 8000,
+  });
 
-async function openPreview(page) {
-  let lastError = null;
-  for (const url of CANDIDATE_URLS) {
-    try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      return url;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError ?? new Error('No preview URL available');
+  await page.goto(selected.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await waitForPreviewRuntime(page, 8000);
+  return selected.url;
 }
 
 function overlap(a, b) {
@@ -31,7 +23,8 @@ function overlap(a, b) {
 
 async function evaluateRuntime(page) {
   return page.evaluate(() => {
-    const scene = cc?.director?.getScene?.();
+    const ccRuntime = globalThis.cc;
+    const scene = ccRuntime?.director?.getScene?.();
     if (!scene) {
       return { ok: false, reason: 'scene not loaded' };
     }
@@ -57,7 +50,7 @@ async function evaluateRuntime(page) {
       return { ok: false, reason: 'missing ShopPanel/FlowControls/MainScene/Main Camera' };
     }
 
-    const camera = mainCameraNode.getComponent?.('cc.Camera') || mainCameraNode.getComponent?.(cc.Camera);
+    const camera = mainCameraNode.getComponent?.('cc.Camera') || mainCameraNode.getComponent?.(ccRuntime?.Camera);
     if (!camera || typeof camera.worldToScreen !== 'function') {
       return { ok: false, reason: 'missing camera.worldToScreen' };
     }
@@ -66,7 +59,7 @@ async function evaluateRuntime(page) {
 
     const rectFromNode = (node) => {
       if (!node) return null;
-      const tr = node.getComponent?.('cc.UITransform') || node.getComponent?.(cc.UITransform);
+      const tr = node.getComponent?.('cc.UITransform') || node.getComponent?.(ccRuntime?.UITransform);
       if (!tr || typeof tr.getBoundingBoxToWorld !== 'function') {
         return null;
       }
@@ -96,7 +89,7 @@ async function evaluateRuntime(page) {
       const selfRect = rectFromNode(node);
       if (selfRect) return selfRect;
 
-      const btn = node.getComponent?.('cc.Button') || node.getComponent?.(cc.Button);
+      const btn = node.getComponent?.('cc.Button') || node.getComponent?.(ccRuntime?.Button);
       const targetRect = rectFromNode(btn?.target);
       if (targetRect) return targetRect;
 
@@ -113,7 +106,7 @@ async function evaluateRuntime(page) {
     });
 
     const toViewport = (worldPoint) => {
-      const s = camera.worldToScreen(new cc.Vec3(worldPoint.x, worldPoint.y, 0));
+      const s = camera.worldToScreen(new ccRuntime.Vec3(worldPoint.x, worldPoint.y, 0));
       return {
         x: s.x,
         y: window.innerHeight - s.y,
@@ -171,7 +164,8 @@ async function evaluateRuntime(page) {
 
 async function resetToShop(page) {
   await page.evaluate(() => {
-    const scene = cc?.director?.getScene?.();
+    const ccRuntime = globalThis.cc;
+    const scene = ccRuntime?.director?.getScene?.();
     if (!scene) return;
 
     const findByName = (root, name) => {
@@ -200,7 +194,7 @@ async function resetToShop(page) {
     }
   });
 
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  await delay(400);
 }
 
 async function realClickAndProbe(page, logs, controlName, expectedEntryLog, expectedStageAfter) {
@@ -248,7 +242,9 @@ async function realClickAndProbe(page, logs, controlName, expectedEntryLog, expe
       }
       return null;
     };
-    const scene = cc.director.getScene();
+    const ccRuntime = globalThis.cc;
+    const scene = ccRuntime?.director?.getScene?.();
+    if (!scene) return;
     const root = find(find(scene, 'Canvas') || scene, 'Root') || scene;
     const flow = root.getChildByName('FlowControls');
     if (!flow) return;
@@ -262,7 +258,7 @@ async function realClickAndProbe(page, logs, controlName, expectedEntryLog, expe
       btn.emit('touchend', { bubbles: false });
     }
   }, point.x, point.y, ctrlName);
-  await new Promise((resolve) => setTimeout(resolve, 550));
+  await delay(550);
 
   const after = await evaluateRuntime(page);
   const deltaLogs = logs.slice(offset);
@@ -314,6 +310,7 @@ function printActionResult(result) {
   });
 
   const page = await browser.newPage();
+  await installPreviewBootstrap(page);
   await page.setViewport({ width: 1280, height: 720 });
 
   const logs = [];
@@ -329,9 +326,9 @@ function printActionResult(result) {
   };
 
   try {
-    snapshot.connectedUrl = await openPreview(page);
+    snapshot.connectedUrl = await openPreview(browser, page);
     console.log(`[UI_TEST] Connected: ${snapshot.connectedUrl}`);
-    await new Promise((resolve) => setTimeout(resolve, 6000));
+    await delay(6000);
 
     await resetToShop(page);
 
